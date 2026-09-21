@@ -47,6 +47,86 @@ export interface ChapterRecord {
   scheduledAt: string | null;
 }
 
+export interface AdminUser {
+  id: string;
+  email: string;
+  displayName: string;
+  role: string;
+  status: string;
+  createdAt: string;
+  creatorProfile: { slug: string } | null;
+}
+
+export interface AdminStory {
+  id: string;
+  title: string;
+  slug: string;
+  status: string;
+  visibility: string;
+  deletedAt: string | null;
+  publishedAt: string | null;
+  updatedAt: string;
+  creator: { slug: string; displayName: string };
+  seoMetadata: { noindex: boolean } | null;
+}
+
+export interface AdminReport {
+  id: string;
+  targetType: string;
+  targetId: string;
+  reason: string;
+  details: string | null;
+  status: string;
+  createdAt: string;
+  reporter: { email: string; displayName: string };
+  actions: { id: string; action: string; reason: string | null; createdAt: string }[];
+}
+
+export interface RevenueConfigRecord {
+  id: string;
+  version: number;
+  creatorPoolPercentage: number;
+  platformPercentage: number;
+  fraudReservePercentage: number;
+  minimumPayoutThresholdCents: string;
+  currency: string;
+  effectiveFrom: string;
+  createdAt: string;
+}
+
+export interface PayoutRecord {
+  id: string;
+  creatorId: string;
+  amountCents: string;
+  currency: string;
+  status: string;
+  periodStart: string;
+  periodEnd: string;
+  requestedAt: string;
+  processedAt: string | null;
+  failureReason: string | null;
+  creator: { slug: string; displayName: string };
+  payoutAccount: { provider: string };
+}
+
+export interface SeoHealth {
+  totalPublic: number;
+  missingDescription: number;
+  missingCover: number;
+  noindexed: number;
+  duplicateSlugs: number;
+  publishedWithoutChapters: number;
+}
+
+export interface AdminStats {
+  users: number;
+  creators: number;
+  stories: number;
+  chapters: number;
+  openReports: number;
+  pendingPayouts: number;
+}
+
 export interface SessionInfo {
   authenticated: boolean;
   userId?: string;
@@ -90,4 +170,43 @@ export const api = {
 
   getWallet: () => request("/api/v1/creator/wallet"),
   getAnalytics: () => request("/api/v1/creator/analytics"),
+
+  admin: {
+    getStats: () => request<AdminStats>("/api/v1/admin/stats"),
+
+    listUsers: (params: { status?: string; role?: string; q?: string; limit?: number; offset?: number } = {}) =>
+      request<{ items: AdminUser[]; total: number }>(`/api/v1/admin/users?${new URLSearchParams(params as Record<string, string>)}`),
+    suspendUser: (csrfToken: string, id: string, reason: string) =>
+      request<AdminUser>(`/api/v1/admin/users/${id}/suspend`, api.withCsrf(csrfToken, { method: "POST", body: JSON.stringify({ reason }) })),
+    reactivateUser: (csrfToken: string, id: string) =>
+      request<AdminUser>(`/api/v1/admin/users/${id}/reactivate`, api.withCsrf(csrfToken, { method: "POST" })),
+
+    listStories: (params: { status?: string; q?: string; limit?: number; offset?: number } = {}) =>
+      request<{ items: AdminStory[]; total: number }>(`/api/v1/admin/stories?${new URLSearchParams(params as Record<string, string>)}`),
+    storyAction: (csrfToken: string, id: string, action: "publish" | "unpublish" | "delete" | "restore" | "noindex", reason?: string) =>
+      request<AdminStory>(`/api/v1/admin/stories/${id}/${action}`, api.withCsrf(csrfToken, { method: "POST", body: JSON.stringify({ reason }) })),
+
+    listReports: (params: { status?: string; limit?: number; offset?: number } = {}) =>
+      request<{ items: AdminReport[]; total: number }>(`/api/v1/admin/reports?${new URLSearchParams(params as Record<string, string>)}`),
+    reviewReport: (csrfToken: string, id: string) => request<AdminReport>(`/api/v1/admin/reports/${id}/review`, api.withCsrf(csrfToken, { method: "POST" })),
+    rejectReport: (csrfToken: string, id: string) => request<AdminReport>(`/api/v1/admin/reports/${id}/reject`, api.withCsrf(csrfToken, { method: "POST" })),
+    resolveReportWithAction: (csrfToken: string, id: string, body: { targetType: string; targetId: string; action: string; reason?: string }) =>
+      request(`/api/v1/admin/reports/${id}/action`, api.withCsrf(csrfToken, { method: "POST", body: JSON.stringify(body) })),
+
+    listRevenueConfigs: () => request<{ items: RevenueConfigRecord[] }>("/api/v1/admin/revenue-configs"),
+    createRevenueConfig: (
+      csrfToken: string,
+      data: { creatorPoolPercentage: number; platformPercentage: number; fraudReservePercentage: number; minimumPayoutThresholdCents: string; currency: string; effectiveFrom: string },
+    ) => request<RevenueConfigRecord>("/api/v1/admin/revenue-configs", api.withCsrf(csrfToken, { method: "POST", body: JSON.stringify(data) })),
+
+    adjustWallet: (csrfToken: string, creatorId: string, amountCents: string, description: string) =>
+      request(`/api/v1/admin/creators/${creatorId}/wallet/adjust`, api.withCsrf(csrfToken, { method: "POST", body: JSON.stringify({ amountCents, description }) })),
+
+    listPayouts: (params: { status?: string; limit?: number; offset?: number } = {}) =>
+      request<{ items: PayoutRecord[]; total: number }>(`/api/v1/admin/payouts?${new URLSearchParams(params as Record<string, string>)}`),
+    setPayoutStatus: (csrfToken: string, id: string, status: "PROCESSING" | "PAID" | "FAILED" | "REVERSED", failureReason?: string) =>
+      request<PayoutRecord>(`/api/v1/admin/payouts/${id}/status`, api.withCsrf(csrfToken, { method: "POST", body: JSON.stringify({ status, failureReason }) })),
+
+    getSeoHealth: () => request<SeoHealth>("/api/v1/admin/seo-health"),
+  },
 };

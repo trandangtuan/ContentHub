@@ -6,7 +6,8 @@ export type ModerationActionType =
   | "DELETE"
   | "RESTORE"
   | "NOINDEX"
-  | "SUSPEND_CREATOR";
+  | "SUSPEND_CREATOR"
+  | "REACTIVATE_USER";
 
 export interface ApplyModerationActionParams {
   moderatorUserId: string;
@@ -40,6 +41,8 @@ export async function applyModerationAction(db: PrismaClient, params: ApplyModer
       await applyContentEffect(tx, params.targetId, params.action);
     } else if (params.targetType === "USER" && params.action === "SUSPEND_CREATOR") {
       await tx.user.update({ where: { id: params.targetId }, data: { status: "SUSPENDED" } });
+    } else if (params.targetType === "USER" && params.action === "REACTIVATE_USER") {
+      await tx.user.update({ where: { id: params.targetId }, data: { status: "ACTIVE" } });
     }
 
     if (params.reportId) {
@@ -73,6 +76,7 @@ async function applyContentEffect(tx: Prisma.TransactionClient, contentId: strin
       });
       break;
     case "SUSPEND_CREATOR":
+    case "REACTIVATE_USER":
       break; // handled at the USER target type, not CONTENT
   }
 }

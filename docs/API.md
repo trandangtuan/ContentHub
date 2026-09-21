@@ -78,6 +78,36 @@ the dashboard, and for any future mobile app / third-party integration
 The schema has no field for a client to claim a view is "qualified" or
 "monetized" — see docs/REVENUE.md.
 
+## Admin (requires `MODERATOR` or `ADMIN`; some routes are `ADMIN`-only as noted)
+
+| Method | Path | Role | Notes |
+|---|---|---|---|
+| GET | `/admin/stats` | MODERATOR | Overview counts: users, creators, stories, chapters, open reports, pending payouts. |
+| GET | `/admin/users` | MODERATOR | `?status&role&q&limit&offset`. |
+| POST | `/admin/users/:id/suspend` | **ADMIN** | `{ reason }`. |
+| POST | `/admin/users/:id/reactivate` | **ADMIN** | Sets the user back to `ACTIVE`. |
+| GET | `/admin/stories` | MODERATOR | Cross-creator, any status. `?status&creatorId&q&limit&offset`. |
+| GET | `/admin/stories/:id/chapters` | MODERATOR | Any status. |
+| POST | `/admin/stories/:id/{publish\|unpublish\|delete\|restore\|noindex}` | MODERATOR | `{ reason? }`. `delete` is a soft delete (spec §3). |
+| GET | `/admin/reports` | MODERATOR | `?status&limit&offset`. |
+| POST | `/admin/reports` | MODERATOR | File a report on a user's behalf: `{ targetType, targetId, reason, details? }`. |
+| POST | `/admin/reports/:id/review` | MODERATOR | `OPEN → REVIEWING`. |
+| POST | `/admin/reports/:id/reject` | MODERATOR | `OPEN\|REVIEWING → REJECTED`. |
+| POST | `/admin/reports/:id/action` | MODERATOR (**ADMIN** if `action` is `SUSPEND_CREATOR`/`REACTIVATE_USER`) | `{ targetType, targetId, action, reason? }` — applies a moderation action and resolves the report in one call. |
+| GET | `/admin/revenue-configs` | MODERATOR | All versions, newest first. |
+| POST | `/admin/revenue-configs` | **ADMIN** | `{ creatorPoolPercentage, platformPercentage, fraudReservePercentage, minimumPayoutThresholdCents, currency, effectiveFrom }`. `422` unless the three percentages sum to exactly 100. Auto-increments `version`. |
+| POST | `/admin/creators/:id/wallet/adjust` | **ADMIN** | `{ amountCents, description, currency? }` — `amountCents` may be negative. Always goes through `WalletLedger` (spec §40). |
+| GET | `/admin/payouts` | MODERATOR | `?status&limit&offset`. |
+| POST | `/admin/payouts/:id/status` | **ADMIN** | `{ status: PROCESSING\|PAID\|FAILED\|REVERSED, failureReason? }`. `PAID` is `409` if the creator's available wallet balance can't cover it; `REVERSED` is only valid from `PAID`. |
+| GET | `/admin/seo-health` | MODERATOR | Counts: missing description/cover, noindexed, duplicate slugs, published-without-chapters. |
+
+Every mutation here still goes through `applyModerationAction`
+(`packages/moderation`) or `WalletLedger.appendEntry`
+(`packages/revenue`) — there is no route in this section that writes to
+`contents`/`users`/`wallets` without also writing the corresponding
+`moderation_actions`/`wallet_transactions` audit row first, in the same
+transaction. See docs/ARCHITECTURE.md's "Admin surface" section.
+
 ## Errors
 
 Every error response is `{ error: "<CODE>", message: "<human text>" }`.

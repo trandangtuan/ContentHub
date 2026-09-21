@@ -104,6 +104,19 @@ functions exist and are tested; the scheduler that actually walks a period
 through these states at month-end is not built in this pass — see
 docs/ARCHITECTURE.md's implementation-status table.
 
+## Admin controls (`/admin`, docs/API.md's Admin section)
+
+`POST /admin/revenue-configs` (ADMIN-only) is how a new versioned split is
+created — validated to sum to exactly 100% before it's written, with
+`created_by_id` recording who. `POST /admin/creators/:id/wallet/adjust`
+(ADMIN-only) is the "Adjust revenue" action from spec §40: it always goes
+through `WalletLedger.appendEntry` with type `ADJUSTMENT`, so a manual
+correction is exactly as auditable as a scheduled payout. `POST
+/admin/payouts/:id/status` moving a payout to `PAID` also goes through the
+ledger (type `PAYOUT`, and is refused with `409` if the creator's
+available balance can't cover it) rather than just flipping the `Payout`
+row's status field.
+
 ## Dashboard transparency
 
 `/dashboard/revenue` and `/dashboard/wallet` (`apps/web`) never show a bare
