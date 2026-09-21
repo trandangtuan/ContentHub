@@ -30,17 +30,17 @@ export default function DashboardHome() {
 
   if (hasCreatorProfile === false) {
     return (
-      <section>
-        <h1>Trở thành Creator</h1>
-        <form onSubmit={becomeCreator}>
-          <label>
-            Tên hiển thị
-            <input value={displayName} onChange={(e) => setDisplayName(e.target.value)} required />
-          </label>
-          <button type="submit" disabled={creating}>
-            {creating ? "Đang tạo..." : "Tạo hồ sơ Creator"}
-          </button>
-        </form>
+      <section className="auth-page" style={{ minHeight: "auto", padding: "2rem 0" }}>
+        <div className="auth-card">
+          <h1>Trở thành Creator</h1>
+          <form onSubmit={becomeCreator}>
+            <label htmlFor="displayName">Tên hiển thị</label>
+            <input id="displayName" value={displayName} onChange={(e) => setDisplayName(e.target.value)} required />
+            <button type="submit" className="btn btn-primary" disabled={creating}>
+              {creating ? "Đang tạo..." : "Tạo hồ sơ Creator"}
+            </button>
+          </form>
+        </div>
       </section>
     );
   }
@@ -48,20 +48,24 @@ export default function DashboardHome() {
   return (
     <section>
       <h1>Creator Studio</h1>
-      <ul>
-        <li>
-          <Link href="/dashboard/stories">Quản lý truyện</Link>
-        </li>
-        <li>
-          <Link href="/dashboard/analytics">Xem analytics</Link>
-        </li>
-        <li>
-          <Link href="/dashboard/revenue">Xem doanh thu</Link>
-        </li>
-        <li>
-          <Link href="/dashboard/wallet">Xem ví</Link>
-        </li>
-      </ul>
+      <div className="card-grid">
+        <Link href="/dashboard/stories" className="card">
+          <p style={{ fontWeight: 600 }}>Quản lý truyện</p>
+          <p className="text-sm text-muted">Tạo, chỉnh sửa và xuất bản truyện của bạn</p>
+        </Link>
+        <Link href="/dashboard/analytics" className="card">
+          <p style={{ fontWeight: 600 }}>Analytics</p>
+          <p className="text-sm text-muted">Theo dõi lượt xem và người theo dõi</p>
+        </Link>
+        <Link href="/dashboard/revenue" className="card">
+          <p style={{ fontWeight: 600 }}>Doanh thu</p>
+          <p className="text-sm text-muted">Xem cách doanh thu được tính</p>
+        </Link>
+        <Link href="/dashboard/wallet" className="card">
+          <p style={{ fontWeight: 600 }}>Ví</p>
+          <p className="text-sm text-muted">Số dư và lịch sử giao dịch</p>
+        </Link>
+      </div>
     </section>
   );
 }

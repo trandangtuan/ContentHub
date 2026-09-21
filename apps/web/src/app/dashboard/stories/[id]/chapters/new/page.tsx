@@ -8,7 +8,9 @@ export default function NewChapterPage() {
   return (
     <section>
       <h1>Chương mới</h1>
-      <ChapterEditorForm storyId={id} />
+      <div className="card">
+        <ChapterEditorForm storyId={id} />
+      </div>
     </section>
   );
 }

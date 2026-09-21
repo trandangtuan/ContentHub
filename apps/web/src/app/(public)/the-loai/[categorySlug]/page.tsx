@@ -49,19 +49,27 @@ export default async function CategoryPage({ params, searchParams }: { params: P
       <Breadcrumbs items={trail} />
 
       <h1>{category.name}</h1>
-      {category.description ? <p>{category.description}</p> : null}
+      {category.description ? <p className="text-muted">{category.description}</p> : null}
 
-      <div className="card-grid">
-        {items.map((story) => (
-          <StoryCard key={story.id} story={{ slug: story.slug, title: story.title, coverImage: story.coverImage, shortDescription: story.shortDescription }} />
-        ))}
-      </div>
+      {items.length === 0 ? (
+        <p className="empty-state">Chưa có truyện nào ở thể loại này.</p>
+      ) : (
+        <div className="card-grid">
+          {items.map((story) => (
+            <StoryCard key={story.id} story={{ slug: story.slug, title: story.title, coverImage: story.coverImage, shortDescription: story.shortDescription }} />
+          ))}
+        </div>
+      )}
 
-      <nav aria-label="Pagination">
-        {page > 1 && <a href={`${paths.category(category.slug)}?page=${page - 1}`}>Trang trước</a>}
-        <span> Trang {page}/{totalPages} </span>
-        {page < totalPages && <a href={`${paths.category(category.slug)}?page=${page + 1}`}>Trang sau</a>}
-      </nav>
+      {totalPages > 1 && (
+        <nav className="pagination" aria-label="Pagination">
+          {page > 1 ? <a href={`${paths.category(category.slug)}?page=${page - 1}`}>← Trang trước</a> : <span />}
+          <span>
+            Trang {page}/{totalPages}
+          </span>
+          {page < totalPages ? <a href={`${paths.category(category.slug)}?page=${page + 1}`}>Trang sau →</a> : <span />}
+        </nav>
+      )}
     </main>
   );
 }

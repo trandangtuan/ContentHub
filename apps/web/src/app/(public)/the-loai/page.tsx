@@ -24,10 +24,12 @@ export default async function CategoryListPage() {
   return (
     <main className="container">
       <h1>Thể loại truyện</h1>
-      <ul>
+      <ul className="chip-list">
         {categories.map((category) => (
           <li key={category.id}>
-            <Link href={paths.category(category.slug)}>{category.name}</Link>
+            <Link href={paths.category(category.slug)} className="chip">
+              {category.name}
+            </Link>
           </li>
         ))}
       </ul>

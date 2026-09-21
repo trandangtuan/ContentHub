@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useSession } from "@/lib/use-session";
 import { api, type AdminStory } from "@/lib/api-client";
+import { StatusBadge } from "@/components/StatusBadge";
 
 const STATUSES = ["DRAFT", "PENDING_REVIEW", "PUBLISHED", "UNPUBLISHED", "REJECTED", "ARCHIVED"];
 
@@ -34,6 +35,7 @@ export default function AdminStoriesPage() {
     <section>
       <h1>Stories (tất cả creator, mọi trạng thái)</h1>
       <form
+        className="filter-bar"
         onSubmit={(e) => {
           e.preventDefault();
           load();
@@ -48,11 +50,15 @@ export default function AdminStoriesPage() {
             </option>
           ))}
         </select>
-        <button type="submit">Lọc</button>
+        <button type="submit" className="btn">
+          Lọc
+        </button>
       </form>
 
       {stories === null ? (
-        <p>Đang tải...</p>
+        <p className="text-muted">Đang tải...</p>
+      ) : stories.length === 0 ? (
+        <p className="empty-state">Không có truyện nào khớp bộ lọc.</p>
       ) : (
         <table>
           <thead>
@@ -70,29 +76,31 @@ export default function AdminStoriesPage() {
               <tr key={s.id}>
                 <td>{s.title}</td>
                 <td>{s.creator.displayName}</td>
-                <td>{s.status}</td>
-                <td>{s.seoMetadata?.noindex ? "yes" : "no"}</td>
-                <td>{s.deletedAt ? "yes" : "no"}</td>
+                <td>
+                  <StatusBadge status={s.status} />
+                </td>
+                <td>{s.seoMetadata?.noindex ? <span className="badge badge-warning">noindex</span> : "—"}</td>
+                <td>{s.deletedAt ? <span className="badge badge-danger">đã xoá</span> : "—"}</td>
                 <td>
                   {s.deletedAt ? (
-                    <button type="button" onClick={() => act(s.id, "restore")}>
+                    <button type="button" className="btn btn-sm" onClick={() => act(s.id, "restore")}>
                       Restore
                     </button>
                   ) : (
                     <>
                       {s.status === "PUBLISHED" ? (
-                        <button type="button" onClick={() => act(s.id, "unpublish")}>
+                        <button type="button" className="btn btn-sm" onClick={() => act(s.id, "unpublish")}>
                           Unpublish
                         </button>
                       ) : (
-                        <button type="button" onClick={() => act(s.id, "publish")}>
+                        <button type="button" className="btn btn-sm" onClick={() => act(s.id, "publish")}>
                           Publish
                         </button>
                       )}{" "}
-                      <button type="button" onClick={() => act(s.id, "noindex")}>
+                      <button type="button" className="btn btn-sm" onClick={() => act(s.id, "noindex")}>
                         Noindex
                       </button>{" "}
-                      <button type="button" onClick={() => act(s.id, "delete")}>
+                      <button type="button" className="btn btn-sm btn-danger" onClick={() => act(s.id, "delete")}>
                         Delete
                       </button>
                     </>

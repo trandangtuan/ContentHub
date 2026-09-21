@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useSession } from "@/lib/use-session";
 import { api, type AdminUser } from "@/lib/api-client";
+import { StatusBadge } from "@/components/StatusBadge";
 
 export default function AdminUsersPage() {
   const { session } = useSession();
@@ -38,6 +39,7 @@ export default function AdminUsersPage() {
     <section>
       <h1>Users</h1>
       <form
+        className="filter-bar"
         onSubmit={(e) => {
           e.preventDefault();
           load();
@@ -50,11 +52,15 @@ export default function AdminUsersPage() {
           <option value="SUSPENDED">SUSPENDED</option>
           <option value="BANNED">BANNED</option>
         </select>
-        <button type="submit">Lọc</button>
+        <button type="submit" className="btn">
+          Lọc
+        </button>
       </form>
 
       {users === null ? (
-        <p>Đang tải...</p>
+        <p className="text-muted">Đang tải...</p>
+      ) : users.length === 0 ? (
+        <p className="empty-state">Không có user nào khớp bộ lọc.</p>
       ) : (
         <table>
           <thead>
@@ -72,16 +78,20 @@ export default function AdminUsersPage() {
               <tr key={u.id}>
                 <td>{u.email}</td>
                 <td>{u.displayName}</td>
-                <td>{u.role}</td>
-                <td>{u.status}</td>
+                <td>
+                  <span className="badge badge-primary">{u.role}</span>
+                </td>
+                <td>
+                  <StatusBadge status={u.status} />
+                </td>
                 <td>{u.creatorProfile?.slug ?? "—"}</td>
                 <td>
                   {u.status === "SUSPENDED" ? (
-                    <button type="button" onClick={() => reactivate(u.id)}>
+                    <button type="button" className="btn btn-sm" onClick={() => reactivate(u.id)}>
                       Reactivate
                     </button>
                   ) : (
-                    <button type="button" onClick={() => suspend(u.id)}>
+                    <button type="button" className="btn btn-sm btn-danger" onClick={() => suspend(u.id)}>
                       Suspend
                     </button>
                   )}

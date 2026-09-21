@@ -31,20 +31,18 @@ export default function NewStoryPage() {
   return (
     <section>
       <h1>Tạo truyện mới</h1>
-      <form onSubmit={onSubmit}>
-        <label>
-          Tiêu đề
-          <input value={title} onChange={(e) => setTitle(e.target.value)} required maxLength={200} />
-        </label>
-        <label>
-          Mô tả
-          <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={5} maxLength={5000} />
-        </label>
-        {error ? <p role="alert">{error}</p> : null}
-        <button type="submit" disabled={submitting}>
-          {submitting ? "Đang lưu..." : "Lưu nháp"}
-        </button>
-      </form>
+      <div className="card" style={{ maxWidth: 560 }}>
+        <form onSubmit={onSubmit} className="stack">
+          <label htmlFor="title">Tiêu đề</label>
+          <input id="title" value={title} onChange={(e) => setTitle(e.target.value)} required maxLength={200} />
+          <label htmlFor="description">Mô tả</label>
+          <textarea id="description" value={description} onChange={(e) => setDescription(e.target.value)} rows={5} maxLength={5000} />
+          {error ? <p role="alert">{error}</p> : null}
+          <button type="submit" className="btn btn-primary" disabled={submitting}>
+            {submitting ? "Đang lưu..." : "Lưu nháp"}
+          </button>
+        </form>
+      </div>
     </section>
   );
 }

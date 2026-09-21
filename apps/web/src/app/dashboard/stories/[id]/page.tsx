@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import { useSession } from "@/lib/use-session";
 import { api, ApiError, type StoryRecord } from "@/lib/api-client";
+import { StatusBadge } from "@/components/StatusBadge";
 
 export default function EditStoryPage() {
   const { id } = useParams<{ id: string }>();
@@ -55,13 +56,16 @@ export default function EditStoryPage() {
     setStatus("Đã gỡ xuất bản.");
   }
 
-  if (!story) return <p>Đang tải...</p>;
+  if (!story) return <p className="text-muted">Đang tải...</p>;
 
   return (
     <section>
-      <h1>Sửa truyện: {story.title}</h1>
-      <p>
-        Trạng thái: <strong>{story.status}</strong> · <Link href={`/dashboard/stories/${id}/chapters`}>Quản lý chương</Link>
+      <div className="row-between">
+        <h1>Sửa truyện: {story.title}</h1>
+        <StatusBadge status={story.status} />
+      </div>
+      <p className="text-sm text-muted" style={{ marginBottom: "1.5rem" }}>
+        <Link href={`/dashboard/stories/${id}/chapters`}>Quản lý chương</Link>
         {story.status === "PUBLISHED" && (
           <>
             {" · "}
@@ -72,28 +76,30 @@ export default function EditStoryPage() {
         )}
       </p>
 
-      <form onSubmit={saveDraft}>
-        <label>
-          Tiêu đề
-          <input value={title} onChange={(e) => setTitle(e.target.value)} required maxLength={200} />
-        </label>
-        <label>
-          Mô tả
-          <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={5} maxLength={5000} />
-        </label>
-        {error ? <p role="alert">{error}</p> : null}
-        {status ? <p>{status}</p> : null}
-        <button type="submit">Lưu nháp</button>
-        {story.status === "PUBLISHED" ? (
-          <button type="button" onClick={unpublish}>
-            Gỡ xuất bản
-          </button>
-        ) : (
-          <button type="button" onClick={publish}>
-            Xuất bản
-          </button>
-        )}
-      </form>
+      <div className="card" style={{ maxWidth: 560 }}>
+        <form onSubmit={saveDraft} className="stack">
+          <label htmlFor="title">Tiêu đề</label>
+          <input id="title" value={title} onChange={(e) => setTitle(e.target.value)} required maxLength={200} />
+          <label htmlFor="description">Mô tả</label>
+          <textarea id="description" value={description} onChange={(e) => setDescription(e.target.value)} rows={5} maxLength={5000} />
+          {error ? <p role="alert">{error}</p> : null}
+          {status ? <p className="text-sm text-muted">{status}</p> : null}
+          <div className="row">
+            <button type="submit" className="btn">
+              Lưu nháp
+            </button>
+            {story.status === "PUBLISHED" ? (
+              <button type="button" className="btn btn-danger" onClick={unpublish}>
+                Gỡ xuất bản
+              </button>
+            ) : (
+              <button type="button" className="btn btn-primary" onClick={publish}>
+                Xuất bản
+              </button>
+            )}
+          </div>
+        </form>
+      </div>
     </section>
   );
 }

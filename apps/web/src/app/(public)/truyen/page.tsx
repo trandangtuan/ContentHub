@@ -29,16 +29,24 @@ export default async function StoryListPage({ searchParams }: { searchParams: Pr
   return (
     <main className="container">
       <h1>Danh sách truyện</h1>
-      <div className="card-grid">
-        {items.map((story) => (
-          <StoryCard key={story.id} story={{ slug: story.slug, title: story.title, coverImage: story.coverImage, shortDescription: story.shortDescription }} />
-        ))}
-      </div>
-      <nav aria-label="Pagination">
-        {page > 1 && <a href={`/truyen?page=${page - 1}`}>Trang trước</a>}
-        <span> Trang {page}/{totalPages} </span>
-        {page < totalPages && <a href={`/truyen?page=${page + 1}`}>Trang sau</a>}
-      </nav>
+      {items.length === 0 ? (
+        <p className="empty-state">Chưa có truyện nào.</p>
+      ) : (
+        <div className="card-grid">
+          {items.map((story) => (
+            <StoryCard key={story.id} story={{ slug: story.slug, title: story.title, coverImage: story.coverImage, shortDescription: story.shortDescription }} />
+          ))}
+        </div>
+      )}
+      {totalPages > 1 && (
+        <nav className="pagination" aria-label="Pagination">
+          {page > 1 ? <a href={`/truyen?page=${page - 1}`}>← Trang trước</a> : <span />}
+          <span>
+            Trang {page}/{totalPages}
+          </span>
+          {page < totalPages ? <a href={`/truyen?page=${page + 1}`}>Trang sau →</a> : <span />}
+        </nav>
+      )}
     </main>
   );
 }

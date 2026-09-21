@@ -80,18 +80,34 @@ export default async function StoryPage({ params }: { params: Promise<Params> })
       <Breadcrumbs items={breadcrumbs.story(story.title, story.slug)} />
 
       <article>
-        <header>
+        <header className="story-hero">
           {story.coverImage ? (
-            <Image src={story.coverImage} alt={`Ảnh bìa truyện ${story.title}`} width={240} height={320} priority />
+            <Image src={story.coverImage} alt={`Ảnh bìa truyện ${story.title}`} width={200} height={267} priority />
           ) : null}
-          <h1>{story.title}</h1>
-          {story.story?.subtitle ? <p>{story.story.subtitle}</p> : null}
-          <address>
-            Tác giả: <Link href={paths.author(story.creator.slug)} rel="author">{story.creator.displayName}</Link>
-          </address>
-          <p>
-            Xuất bản: {story.publishedAt?.toLocaleDateString(config.defaultLocale)} — Cập nhật: {story.updatedAt.toLocaleDateString(config.defaultLocale)}
-          </p>
+          <div className="story-hero-info">
+            <h1>{story.title}</h1>
+            {story.story?.subtitle ? <p className="subtitle">{story.story.subtitle}</p> : null}
+            <address>
+              Tác giả:{" "}
+              <Link href={paths.author(story.creator.slug)} rel="author">
+                {story.creator.displayName}
+              </Link>
+            </address>
+            <p className="text-sm text-muted">
+              Xuất bản: {story.publishedAt?.toLocaleDateString(config.defaultLocale)} — Cập nhật: {story.updatedAt.toLocaleDateString(config.defaultLocale)}
+            </p>
+            {story.categories.length > 0 && (
+              <ul className="chip-list" style={{ marginTop: 12 }}>
+                {story.categories.map(({ category }) => (
+                  <li key={category.id}>
+                    <Link href={paths.category(category.slug)} className="chip">
+                      {category.name}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         </header>
 
         <section>
@@ -99,26 +115,15 @@ export default async function StoryPage({ params }: { params: Promise<Params> })
           <p>{story.description}</p>
         </section>
 
-        {story.categories.length > 0 && (
-          <section>
-            <h2>Thể loại</h2>
-            <ul>
-              {story.categories.map(({ category }) => (
-                <li key={category.id}>
-                  <Link href={paths.category(category.slug)}>{category.name}</Link>
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
-
         {story.tags.length > 0 && (
           <section>
             <h2>Tag</h2>
-            <ul>
+            <ul className="chip-list">
               {story.tags.map(({ tag }) => (
                 <li key={tag.id}>
-                  <Link href={paths.tag(tag.slug)}>{tag.name}</Link>
+                  <Link href={paths.tag(tag.slug)} className="chip">
+                    {tag.name}
+                  </Link>
                 </li>
               ))}
             </ul>
@@ -127,13 +132,17 @@ export default async function StoryPage({ params }: { params: Promise<Params> })
 
         <section>
           <h2>Danh sách chương ({chapters.length})</h2>
-          <ol>
-            {chapters.map((chapter) => (
-              <li key={chapter.id}>
-                <Link href={paths.chapter(story.slug, chapter.slug)}>{chapter.title}</Link>
-              </li>
-            ))}
-          </ol>
+          {chapters.length === 0 ? (
+            <p className="empty-state">Chưa có chương nào được xuất bản.</p>
+          ) : (
+            <ol className="chapter-list">
+              {chapters.map((chapter) => (
+                <li key={chapter.id}>
+                  <Link href={paths.chapter(story.slug, chapter.slug)}>{chapter.title}</Link>
+                </li>
+              ))}
+            </ol>
+          )}
         </section>
       </article>
     </main>
