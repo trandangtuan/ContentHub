@@ -25,6 +25,23 @@ export async function getChapter(contentId: string, chapterSlug: string) {
   return prisma.contentPart.findFirst({ where: { contentId, slug: chapterSlug } });
 }
 
+/**
+ * Raw view count for public display (docs/REVENUE.md: RAW -> VALID ->
+ * QUALIFIED -> MONETIZED). Deliberately sums the `rawViews` stage only —
+ * qualified/monetized figures are revenue-facing and must never surface
+ * here. ContentView has no story-level rows, so a story's total is the sum
+ * across all of its chapters' daily aggregates.
+ */
+export async function getStoryViewCount(contentId: string): Promise<number> {
+  const result = await prisma.contentView.aggregate({ where: { contentId }, _sum: { rawViews: true } });
+  return result._sum.rawViews ?? 0;
+}
+
+export async function getChapterViewCount(contentId: string, contentPartId: string): Promise<number> {
+  const result = await prisma.contentView.aggregate({ where: { contentId, contentPartId }, _sum: { rawViews: true } });
+  return result._sum.rawViews ?? 0;
+}
+
 export async function getAdjacentChapters(contentId: string, position: number) {
   const [previousChapter, nextChapter] = await Promise.all([
     prisma.contentPart.findFirst({ where: { contentId, status: "PUBLISHED", position: { lt: position } }, orderBy: { position: "desc" } }),

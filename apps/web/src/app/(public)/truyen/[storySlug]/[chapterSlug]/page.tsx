@@ -15,7 +15,7 @@ import {
   paths,
 } from "@contenthub/seo";
 import { getSeoConfig } from "@/lib/seo-config";
-import { getStoryBySlug, getChapter, getAdjacentChapters } from "@/lib/public-data";
+import { getStoryBySlug, getChapter, getAdjacentChapters, getChapterViewCount } from "@/lib/public-data";
 import { sanitizeContentHtml } from "@/lib/sanitize";
 import { Breadcrumbs } from "@/components/Breadcrumbs";
 import { JsonLd } from "@/components/JsonLd";
@@ -62,7 +62,10 @@ export default async function ChapterPage({ params }: { params: Promise<Params> 
   const { storySlug, chapterSlug } = await params;
   const config = getSeoConfig();
   const { story, chapter } = await loadChapterOr404(storySlug, chapterSlug);
-  const { previousChapter, nextChapter } = await getAdjacentChapters(story.id, chapter.position);
+  const [{ previousChapter, nextChapter }, viewCount] = await Promise.all([
+    getAdjacentChapters(story.id, chapter.position),
+    getChapterViewCount(story.id, chapter.id),
+  ]);
 
   const trail = breadcrumbs.chapter(story.title, story.slug, chapter.title, chapter.slug);
   const safeHtml = sanitizeContentHtml(chapter.bodyHtml ?? "");
@@ -83,6 +86,8 @@ export default async function ChapterPage({ params }: { params: Promise<Params> 
             </Link>
             {" · "}
             {chapter.readingTimeMinutes} phút đọc
+            {" · "}
+            {viewCount.toLocaleString(config.defaultLocale)} lượt xem
           </p>
         </header>
 

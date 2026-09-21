@@ -16,7 +16,7 @@ import {
   paths,
 } from "@contenthub/seo";
 import { getSeoConfig } from "@/lib/seo-config";
-import { getStoryBySlug, getPublishedChapters } from "@/lib/public-data";
+import { getStoryBySlug, getPublishedChapters, getStoryViewCount } from "@/lib/public-data";
 import { Breadcrumbs } from "@/components/Breadcrumbs";
 import { JsonLd } from "@/components/JsonLd";
 
@@ -59,7 +59,7 @@ export default async function StoryPage({ params }: { params: Promise<Params> })
   const { storySlug } = await params;
   const config = getSeoConfig();
   const story = await loadStoryOr404(storySlug);
-  const chapters = await getPublishedChapters(story.id);
+  const [chapters, viewCount] = await Promise.all([getPublishedChapters(story.id), getStoryViewCount(story.id)]);
 
   return (
     <main className="container">
@@ -96,6 +96,7 @@ export default async function StoryPage({ params }: { params: Promise<Params> })
             <p className="text-sm text-muted">
               Xuất bản: {story.publishedAt?.toLocaleDateString(config.defaultLocale)} — Cập nhật: {story.updatedAt.toLocaleDateString(config.defaultLocale)}
             </p>
+            <p className="text-sm text-muted">{viewCount.toLocaleString(config.defaultLocale)} lượt xem</p>
             {story.categories.length > 0 && (
               <ul className="chip-list" style={{ marginTop: 12 }}>
                 {story.categories.map(({ category }) => (
