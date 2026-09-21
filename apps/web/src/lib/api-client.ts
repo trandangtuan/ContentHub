@@ -9,8 +9,16 @@ export class ApiError extends Error {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const method = init?.method ?? "GET";
+  // Every request declares Content-Type: application/json below, but several
+  // callers (publishStory, unpublishStory, admin reactivateUser/reviewReport/…)
+  // issue a POST with no body. Fastify rejects an empty body sent with a JSON
+  // content-type, so default to "{}" for any body-carrying method.
+  const needsDefaultBody = init?.body === undefined && method !== "GET" && method !== "HEAD";
+
   const response = await fetch(`${API_URL}${path}`, {
     ...init,
+    body: needsDefaultBody ? "{}" : init?.body,
     credentials: "include",
     headers: { "Content-Type": "application/json", ...init?.headers },
   });
