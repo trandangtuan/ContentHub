@@ -89,6 +89,46 @@ export function registerCreatorRoutes(app: FastifyInstance) {
   });
 
   // ── Stories ───────────────────────────────────────────────────────────
+  app.get("/creator/stories", async (request) => {
+    const session = app.requireAuth(request);
+    if (!session.creatorProfileId) return { stories: [] };
+
+    const stories = await prisma.content.findMany({
+      where: { creatorId: session.creatorProfileId, deletedAt: null },
+      orderBy: { updatedAt: "desc" },
+      include: { story: true, _count: { select: { parts: true } } },
+    });
+
+    return { stories };
+  });
+
+  app.get("/creator/stories/:id", async (request) => {
+    const session = app.requireAuth(request);
+    const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
+    const content = await requireOwnedStory(session, id);
+    return content;
+  });
+
+  app.get("/creator/stories/:id/chapters", async (request) => {
+    const session = app.requireAuth(request);
+    const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
+    await requireOwnedStory(session, id);
+
+    const chapters = await prisma.contentPart.findMany({ where: { contentId: id, deletedAt: null }, orderBy: { position: "asc" } });
+    return { chapters };
+  });
+
+  app.get("/creator/chapters/:id", async (request) => {
+    const session = app.requireAuth(request);
+    const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
+
+    const part = await prisma.contentPart.findUnique({ where: { id } });
+    if (!part || part.deletedAt) throw new NotFoundError("Chapter not found");
+    await requireOwnedStory(session, part.contentId);
+
+    return part;
+  });
+
   app.post("/creator/stories", async (request, reply) => {
     const session = app.requireRole(request, "CREATOR");
     app.requireCsrf(request);

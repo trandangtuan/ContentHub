@@ -232,3 +232,44 @@ describe("GET /api/v1/creator/wallet", () => {
     expect(body).toHaveProperty("paidCents");
   });
 });
+
+describe("Dashboard listing endpoints", () => {
+  it("lists only the current creator's own stories, including drafts", async () => {
+    const { cookies, csrfToken } = await registerAndBecomeCreator("Listing Author");
+    await app.inject({
+      method: "POST",
+      url: "/api/v1/creator/stories",
+      cookies,
+      headers: { "x-csrf-token": csrfToken },
+      payload: { title: `Listing Story ${Date.now()}`, description: "d" },
+    });
+
+    const response = await app.inject({ method: "GET", url: "/api/v1/creator/stories", cookies });
+    const body = response.json();
+    expect(body.stories.length).toBeGreaterThanOrEqual(1);
+    expect(body.stories[0].status).toBe("DRAFT");
+  });
+
+  it("lists a story's chapters for its owner", async () => {
+    const { cookies, csrfToken } = await registerAndBecomeCreator("Chapter Listing Author");
+    const createStory = await app.inject({
+      method: "POST",
+      url: "/api/v1/creator/stories",
+      cookies,
+      headers: { "x-csrf-token": csrfToken },
+      payload: { title: `Chapter Listing Story ${Date.now()}`, description: "d" },
+    });
+    const story = createStory.json();
+
+    await app.inject({
+      method: "POST",
+      url: `/api/v1/creator/stories/${story.id}/chapters`,
+      cookies,
+      headers: { "x-csrf-token": csrfToken },
+      payload: { title: "Chapter 1", bodyHtml: "<p>x</p>" },
+    });
+
+    const response = await app.inject({ method: "GET", url: `/api/v1/creator/stories/${story.id}/chapters`, cookies });
+    expect(response.json().chapters).toHaveLength(1);
+  });
+});
