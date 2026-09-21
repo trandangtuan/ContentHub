@@ -14,7 +14,11 @@ import { registerEventRoutes } from "./routes/events.js";
 import { registerAdminRoutes } from "./routes/admin.js";
 
 export function buildApp(config: ApiConfig): FastifyInstance {
-  const app = Fastify({ logger: false, trustProxy: true });
+  // Disabled in tests to keep output quiet; otherwise unhandled errors in
+  // the error handler below would be silently swallowed (Fastify's no-op
+  // logger discards .error() calls), making 500s undiagnosable in prod logs.
+  const isTest = process.env.NODE_ENV === "test";
+  const app = Fastify({ logger: isTest ? false : { level: process.env.LOG_LEVEL ?? "info" }, trustProxy: true });
 
   app.register(cors, { origin: config.corsOrigins, credentials: true });
   app.register(cookie);
@@ -33,6 +37,15 @@ export function buildApp(config: ApiConfig): FastifyInstance {
     // @fastify/rate-limit throws a plain error with statusCode 429
     if ((error as { statusCode?: number }).statusCode === 429) {
       reply.status(429).send({ error: "RATE_LIMITED", message: "Too many requests" });
+      return;
+    }
+    // Fastify's own errors (malformed/empty JSON body, payload too large,
+    // unsupported media type, etc.) already carry a real 4xx statusCode —
+    // surface it instead of masking a client mistake as a 500.
+    const fastifyStatus = (error as { statusCode?: number }).statusCode;
+    if (fastifyStatus && fastifyStatus >= 400 && fastifyStatus < 500) {
+      const fastifyError = error as { code?: string; message: string };
+      reply.status(fastifyStatus).send({ error: fastifyError.code ?? "BAD_REQUEST", message: fastifyError.message });
       return;
     }
     app.log.error(error);
