@@ -36,6 +36,27 @@ in this repo's dev sandbox — the sandbox's egress policy blocks pulling
 `node:20-alpine` from Docker Hub's CDN. Run `docker compose up -d --build`
 in a normal environment before depending on it in production.
 
+### Known issue found in a real deployment: Prisma engine vs. Alpine OpenSSL
+
+`web-1` failing with `Error loading shared library libssl.so.1.1: No such
+file or directory (needed by .../libquery_engine-linux-musl.so.node)` is
+Prisma picking its legacy OpenSSL-1.1-targeting engine binary, which
+doesn't exist on `node:20-alpine` (ships OpenSSL 3.x). Fixed by:
+
+1. `packages/database/prisma/schema.prisma`'s `generator client` block
+   now sets `binaryTargets = ["native", "linux-musl-openssl-3.0.x"]`, so
+   `prisma generate` fetches the OpenSSL-3-compatible musl engine instead
+   of defaulting to the OpenSSL-1.1 one.
+2. Both Dockerfiles' `base` stage now runs `apk add --no-cache openssl` —
+   the engine is a separate native binary that dynamically links against
+   the *system* libssl, which the base `node:20-alpine` image doesn't
+   install on its own even though Node's own bundled OpenSSL works fine.
+
+If you re-build images from an older checkout and hit this, `rm -rf
+node_modules/.pnpm/@prisma+client*/node_modules/.prisma` and re-run
+`prisma generate` (or just rebuild the Docker image) to pick up the new
+`binaryTargets`.
+
 ## Production architecture
 
 ```
