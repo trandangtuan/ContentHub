@@ -1,6 +1,14 @@
 import type { Metadata } from "next";
+import { Be_Vietnam_Pro } from "next/font/google";
 import { getSeoConfig } from "@/lib/seo-config";
 import "./globals.css";
+
+const beVietnamPro = Be_Vietnam_Pro({
+  subsets: ["latin", "vietnamese"],
+  weight: ["400", "500", "600", "700", "800"],
+  variable: "--font-be-vietnam-pro",
+  display: "swap",
+});
 
 export function generateMetadata(): Metadata {
   const config = getSeoConfig();
@@ -19,7 +27,7 @@ export function generateMetadata(): Metadata {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   const config = getSeoConfig();
   return (
-    <html lang={config.defaultLocale}>
+    <html lang={config.defaultLocale} className={beVietnamPro.variable}>
       <body>{children}</body>
     </html>
   );

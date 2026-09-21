@@ -73,12 +73,14 @@ export default async function ChapterPage({ params }: { params: Promise<Params> 
       <Breadcrumbs items={trail} />
 
       <article>
-        <header>
+        <header style={{ maxWidth: "70ch", margin: "0 auto 32px" }}>
           <h1>{chapter.title}</h1>
-          <p>
+          <p className="text-sm text-muted">
             <Link href={paths.story(story.slug)}>{story.title}</Link>
             {" · "}
-            <Link href={paths.author(story.creator.slug)} rel="author">{story.creator.displayName}</Link>
+            <Link href={paths.author(story.creator.slug)} rel="author">
+              {story.creator.displayName}
+            </Link>
             {" · "}
             {chapter.readingTimeMinutes} phút đọc
           </p>
@@ -86,7 +88,7 @@ export default async function ChapterPage({ params }: { params: Promise<Params> 
 
         <section className="chapter-content" dangerouslySetInnerHTML={{ __html: safeHtml }} />
 
-        <nav className="chapter-nav" aria-label="Chapter navigation">
+        <nav className="chapter-nav" aria-label="Chapter navigation" style={{ maxWidth: "70ch", margin: "40px auto 24px" }}>
           {previousChapter ? <Link href={paths.chapter(story.slug, previousChapter.slug)}>&larr; {previousChapter.title}</Link> : <span aria-disabled="true">&larr; Chương đầu</span>}
           <Link href={paths.story(story.slug)}>Danh sách chương</Link>
           {nextChapter ? <Link href={paths.chapter(story.slug, nextChapter.slug)}>{nextChapter.title} &rarr;</Link> : <span aria-disabled="true">Chương cuối &rarr;</span>}

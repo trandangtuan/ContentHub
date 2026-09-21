@@ -68,7 +68,9 @@ export default function AdminRevenuePage() {
 
       <h2>Revenue config (versioned — spec #72, never hard-coded)</h2>
       {configs === null ? (
-        <p>Đang tải...</p>
+        <p className="text-muted">Đang tải...</p>
+      ) : configs.length === 0 ? (
+        <p className="empty-state">Chưa có revenue config nào.</p>
       ) : (
         <table>
           <thead>
@@ -96,50 +98,42 @@ export default function AdminRevenuePage() {
         </table>
       )}
 
-      <h3>Tạo phiên bản mới (phải cộng đúng 100%)</h3>
-      <form onSubmit={createConfig}>
-        <label>
-          Creator pool %
-          <input type="number" step="0.01" value={creatorPool} onChange={(e) => setCreatorPool(e.target.value)} />
-        </label>
-        <label>
-          Platform %
-          <input type="number" step="0.01" value={platform} onChange={(e) => setPlatform(e.target.value)} />
-        </label>
-        <label>
-          Fraud reserve %
-          <input type="number" step="0.01" value={fraudReserve} onChange={(e) => setFraudReserve(e.target.value)} />
-        </label>
-        <label>
-          Minimum payout (cents)
-          <input value={minPayout} onChange={(e) => setMinPayout(e.target.value)} />
-        </label>
-        <label>
-          Currency
-          <input value={currency} onChange={(e) => setCurrency(e.target.value)} maxLength={3} />
-        </label>
-        {error ? <p role="alert">{error}</p> : null}
-        <button type="submit">Tạo version mới</button>
-      </form>
+      <div className="card" style={{ marginTop: "1.5rem" }}>
+        <h3>Tạo phiên bản mới (phải cộng đúng 100%)</h3>
+        <form onSubmit={createConfig} className="stack">
+          <label htmlFor="creatorPool">Creator pool %</label>
+          <input id="creatorPool" type="number" step="0.01" value={creatorPool} onChange={(e) => setCreatorPool(e.target.value)} />
+          <label htmlFor="platform">Platform %</label>
+          <input id="platform" type="number" step="0.01" value={platform} onChange={(e) => setPlatform(e.target.value)} />
+          <label htmlFor="fraudReserve">Fraud reserve %</label>
+          <input id="fraudReserve" type="number" step="0.01" value={fraudReserve} onChange={(e) => setFraudReserve(e.target.value)} />
+          <label htmlFor="minPayout">Minimum payout (cents)</label>
+          <input id="minPayout" value={minPayout} onChange={(e) => setMinPayout(e.target.value)} />
+          <label htmlFor="currency">Currency</label>
+          <input id="currency" value={currency} onChange={(e) => setCurrency(e.target.value)} maxLength={3} />
+          {error ? <p role="alert">{error}</p> : null}
+          <button type="submit" className="btn btn-primary">
+            Tạo version mới
+          </button>
+        </form>
+      </div>
 
-      <h2>Điều chỉnh ví Creator (Adjust revenue — spec #40)</h2>
-      <p>Mọi điều chỉnh được ghi vào wallet_transactions (ledger), không sửa trực tiếp số dư.</p>
-      <form onSubmit={adjustWallet}>
-        <label>
-          Creator ID
-          <input value={creatorId} onChange={(e) => setCreatorId(e.target.value)} placeholder="creator_profile.id" required />
-        </label>
-        <label>
-          Số tiền (cents, âm = trừ)
-          <input value={adjustAmount} onChange={(e) => setAdjustAmount(e.target.value)} placeholder="ví dụ: 100000 hoặc -50000" required />
-        </label>
-        <label>
-          Lý do
-          <input value={adjustReason} onChange={(e) => setAdjustReason(e.target.value)} required />
-        </label>
-        {adjustStatus ? <p>{adjustStatus}</p> : null}
-        <button type="submit">Ghi điều chỉnh</button>
-      </form>
+      <div className="card" style={{ marginTop: "1.5rem" }}>
+        <h2>Điều chỉnh ví Creator (Adjust revenue — spec #40)</h2>
+        <p className="text-sm text-muted">Mọi điều chỉnh được ghi vào wallet_transactions (ledger), không sửa trực tiếp số dư.</p>
+        <form onSubmit={adjustWallet} className="stack">
+          <label htmlFor="creatorId">Creator ID</label>
+          <input id="creatorId" value={creatorId} onChange={(e) => setCreatorId(e.target.value)} placeholder="creator_profile.id" required />
+          <label htmlFor="adjustAmount">Số tiền (cents, âm = trừ)</label>
+          <input id="adjustAmount" value={adjustAmount} onChange={(e) => setAdjustAmount(e.target.value)} placeholder="ví dụ: 100000 hoặc -50000" required />
+          <label htmlFor="adjustReason">Lý do</label>
+          <input id="adjustReason" value={adjustReason} onChange={(e) => setAdjustReason(e.target.value)} required />
+          {adjustStatus ? <p className="text-sm text-muted">{adjustStatus}</p> : null}
+          <button type="submit" className="btn btn-primary">
+            Ghi điều chỉnh
+          </button>
+        </form>
+      </div>
     </section>
   );
 }

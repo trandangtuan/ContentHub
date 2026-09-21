@@ -13,18 +13,20 @@ export default function EditChapterPage() {
     api.getChapter(chapterId).then(setChapter);
   }, [chapterId]);
 
-  if (!chapter) return <p>Đang tải...</p>;
+  if (!chapter) return <p className="text-muted">Đang tải...</p>;
 
   return (
     <section>
       <h1>Sửa chương</h1>
-      <ChapterEditorForm
-        storyId={id}
-        chapterId={chapter.id}
-        initialTitle={chapter.title}
-        initialHtml={chapter.bodyHtml ?? ""}
-        initialStatus={chapter.status}
-      />
+      <div className="card">
+        <ChapterEditorForm
+          storyId={id}
+          chapterId={chapter.id}
+          initialTitle={chapter.title}
+          initialHtml={chapter.bodyHtml ?? ""}
+          initialStatus={chapter.status}
+        />
+      </div>
     </section>
   );
 }

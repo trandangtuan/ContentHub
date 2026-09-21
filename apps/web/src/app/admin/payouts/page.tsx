@@ -4,6 +4,7 @@ import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useSession } from "@/lib/use-session";
 import { api, ApiError, type PayoutRecord } from "@/lib/api-client";
+import { StatusBadge } from "@/components/StatusBadge";
 
 export default function AdminPayoutsPage() {
   return (
@@ -50,20 +51,22 @@ function AdminPayoutsPageInner() {
   return (
     <section>
       <h1>Payouts</h1>
-      <select value={status} onChange={(e) => setStatus(e.target.value)}>
-        <option value="">Tất cả</option>
-        <option value="PENDING">PENDING</option>
-        <option value="PROCESSING">PROCESSING</option>
-        <option value="PAID">PAID</option>
-        <option value="FAILED">FAILED</option>
-        <option value="REVERSED">REVERSED</option>
-      </select>
+      <div className="filter-bar">
+        <select value={status} onChange={(e) => setStatus(e.target.value)}>
+          <option value="">Tất cả</option>
+          <option value="PENDING">PENDING</option>
+          <option value="PROCESSING">PROCESSING</option>
+          <option value="PAID">PAID</option>
+          <option value="FAILED">FAILED</option>
+          <option value="REVERSED">REVERSED</option>
+        </select>
+      </div>
       {error ? <p role="alert">{error}</p> : null}
 
       {payouts === null ? (
-        <p>Đang tải...</p>
+        <p className="text-muted">Đang tải...</p>
       ) : payouts.length === 0 ? (
-        <p>Không có payout nào.</p>
+        <p className="empty-state">Không có payout nào.</p>
       ) : (
         <table>
           <thead>
@@ -80,34 +83,38 @@ function AdminPayoutsPageInner() {
             {payouts.map((p) => (
               <tr key={p.id}>
                 <td>{p.creator.displayName}</td>
-                <td>{(Number(p.amountCents) / 100).toLocaleString("vi-VN")} {p.currency}</td>
-                <td>{p.payoutAccount.provider}</td>
-                <td>{p.status}</td>
                 <td>
+                  {(Number(p.amountCents) / 100).toLocaleString("vi-VN")} {p.currency}
+                </td>
+                <td>{p.payoutAccount.provider}</td>
+                <td>
+                  <StatusBadge status={p.status} />
+                </td>
+                <td className="text-sm text-muted">
                   {new Date(p.periodStart).toLocaleDateString("vi-VN")} – {new Date(p.periodEnd).toLocaleDateString("vi-VN")}
                 </td>
                 <td>
                   {(p.status === "PENDING" || p.status === "PROCESSING") && (
                     <>
                       {p.status === "PENDING" && (
-                        <button type="button" onClick={() => setPayoutStatus(p.id, "PROCESSING")}>
+                        <button type="button" className="btn btn-sm" onClick={() => setPayoutStatus(p.id, "PROCESSING")}>
                           Mark processing
                         </button>
                       )}{" "}
-                      <button type="button" onClick={() => setPayoutStatus(p.id, "PAID")}>
+                      <button type="button" className="btn btn-sm btn-primary" onClick={() => setPayoutStatus(p.id, "PAID")}>
                         Mark paid
                       </button>{" "}
-                      <button type="button" onClick={() => setPayoutStatus(p.id, "FAILED")}>
+                      <button type="button" className="btn btn-sm btn-danger" onClick={() => setPayoutStatus(p.id, "FAILED")}>
                         Mark failed
                       </button>
                     </>
                   )}
                   {p.status === "PAID" && (
-                    <button type="button" onClick={() => setPayoutStatus(p.id, "REVERSED")}>
+                    <button type="button" className="btn btn-sm btn-danger" onClick={() => setPayoutStatus(p.id, "REVERSED")}>
                       Reverse
                     </button>
                   )}
-                  {p.status === "FAILED" && p.failureReason ? <em> {p.failureReason}</em> : null}
+                  {p.status === "FAILED" && p.failureReason ? <p className="text-sm text-muted">{p.failureReason}</p> : null}
                 </td>
               </tr>
             ))}

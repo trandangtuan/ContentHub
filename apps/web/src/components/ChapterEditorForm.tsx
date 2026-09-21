@@ -6,6 +6,7 @@ import { useSession } from "@/lib/use-session";
 import { api, ApiError } from "@/lib/api-client";
 import { Editor, type EditorStats } from "@/components/Editor";
 import { sanitizeContentHtml } from "@/lib/sanitize";
+import { StatusBadge } from "@/components/StatusBadge";
 
 const AUTOSAVE_DEBOUNCE_MS = 2000;
 
@@ -82,30 +83,30 @@ export function ChapterEditorForm({ storyId, chapterId: initialChapterId, initia
   }
 
   return (
-    <div>
-      <label>
-        Tiêu đề chương
-        <input value={title} onChange={(e) => setTitle(e.target.value)} required maxLength={200} />
-      </label>
+    <div className="stack">
+      <label htmlFor="chapterTitle">Tiêu đề chương</label>
+      <input id="chapterTitle" value={title} onChange={(e) => setTitle(e.target.value)} required maxLength={200} />
 
-      <p>
-        {stats.wordCount} từ · {stats.readingTimeMinutes} phút đọc · Trạng thái: {status} ·{" "}
+      <p className="text-sm text-muted">
+        {stats.wordCount} từ · {stats.readingTimeMinutes} phút đọc · <StatusBadge status={status} /> ·{" "}
         {saveState === "saving" ? "Đang lưu..." : saveState === "saved" ? "Đã lưu" : saveState === "error" ? "Lỗi khi lưu" : ""}
       </p>
 
-      <button type="button" onClick={save}>
-        Save draft
-      </button>
-      <button type="button" onClick={() => setPreview((p) => !p)}>
-        {preview ? "Quay lại chỉnh sửa" : "Preview"}
-      </button>
-      <button type="button" onClick={publishNow} disabled={!chapterId}>
-        Publish
-      </button>
-      <input type="datetime-local" value={scheduledAt} onChange={(e) => setScheduledAt(e.target.value)} />
-      <button type="button" onClick={schedule} disabled={!chapterId || !scheduledAt}>
-        Schedule publish
-      </button>
+      <div className="row" style={{ flexWrap: "wrap", alignItems: "center" }}>
+        <button type="button" className="btn btn-sm" onClick={save}>
+          Save draft
+        </button>
+        <button type="button" className="btn btn-sm" onClick={() => setPreview((p) => !p)}>
+          {preview ? "Quay lại chỉnh sửa" : "Preview"}
+        </button>
+        <button type="button" className="btn btn-sm btn-primary" onClick={publishNow} disabled={!chapterId}>
+          Publish
+        </button>
+        <input type="datetime-local" value={scheduledAt} onChange={(e) => setScheduledAt(e.target.value)} style={{ width: "auto" }} />
+        <button type="button" className="btn btn-sm" onClick={schedule} disabled={!chapterId || !scheduledAt}>
+          Schedule publish
+        </button>
+      </div>
 
       {preview ? (
         <article className="chapter-content" dangerouslySetInnerHTML={{ __html: sanitizeContentHtml(stats.html) }} />

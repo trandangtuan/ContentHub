@@ -27,10 +27,15 @@ export default async function AuthorListPage() {
   return (
     <main className="container">
       <h1>Tác giả</h1>
-      <ul>
+      <ul className="avatar-list">
         {creators.map((creator) => (
           <li key={creator.id}>
-            <Link href={paths.author(creator.slug)}>{creator.displayName}</Link>
+            <Link href={paths.author(creator.slug)} className="avatar-chip">
+              <span className="avatar-fallback" aria-hidden="true">
+                {creator.displayName.charAt(0).toUpperCase()}
+              </span>
+              {creator.displayName}
+            </Link>
           </li>
         ))}
       </ul>

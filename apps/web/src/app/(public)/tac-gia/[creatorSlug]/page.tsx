@@ -53,20 +53,32 @@ export default async function AuthorPage({ params }: { params: Promise<Params> }
       <JsonLd data={buildBreadcrumbJsonLd(config, trail)} />
       <Breadcrumbs items={trail} />
 
-      <header>
-        {creator.avatarUrl ? <Image src={creator.avatarUrl} alt={`Ảnh đại diện ${creator.displayName}`} width={96} height={96} /> : null}
-        <h1>{creator.displayName}</h1>
-        {creator.bio ? <p>{creator.bio}</p> : null}
-        <p>Tham gia: {creator.createdAt.toLocaleDateString(config.defaultLocale)}</p>
+      <header className="story-hero">
+        {creator.avatarUrl ? (
+          <Image src={creator.avatarUrl} alt={`Ảnh đại diện ${creator.displayName}`} width={96} height={96} style={{ borderRadius: "50%" }} />
+        ) : (
+          <span className="avatar-fallback" aria-hidden="true" style={{ width: 96, height: 96, fontSize: "2rem" }}>
+            {creator.displayName.charAt(0).toUpperCase()}
+          </span>
+        )}
+        <div className="story-hero-info">
+          <h1>{creator.displayName}</h1>
+          {creator.bio ? <p>{creator.bio}</p> : null}
+          <p className="text-sm text-muted">Tham gia: {creator.createdAt.toLocaleDateString(config.defaultLocale)}</p>
+        </div>
       </header>
 
       <section>
         <h2>Truyện đã xuất bản ({stories.length})</h2>
-        <div className="card-grid">
-          {stories.map((story) => (
-            <StoryCard key={story.id} story={{ slug: story.slug, title: story.title, coverImage: story.coverImage, shortDescription: story.shortDescription }} />
-          ))}
-        </div>
+        {stories.length === 0 ? (
+          <p className="empty-state">Tác giả chưa xuất bản truyện nào.</p>
+        ) : (
+          <div className="card-grid">
+            {stories.map((story) => (
+              <StoryCard key={story.id} story={{ slug: story.slug, title: story.title, coverImage: story.coverImage, shortDescription: story.shortDescription }} />
+            ))}
+          </div>
+        )}
       </section>
     </main>
   );

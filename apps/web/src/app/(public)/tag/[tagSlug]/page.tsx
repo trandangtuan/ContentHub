@@ -52,11 +52,15 @@ export default async function TagPage({ params }: { params: Promise<Params> }) {
 
       <h1>Tag: {tag.name}</h1>
 
-      <div className="card-grid">
-        {stories.map((story) => (
-          <StoryCard key={story.id} story={{ slug: story.slug, title: story.title, coverImage: story.coverImage, shortDescription: story.shortDescription }} />
-        ))}
-      </div>
+      {stories.length === 0 ? (
+        <p className="empty-state">Chưa có truyện nào gắn tag này.</p>
+      ) : (
+        <div className="card-grid">
+          {stories.map((story) => (
+            <StoryCard key={story.id} story={{ slug: story.slug, title: story.title, coverImage: story.coverImage, shortDescription: story.shortDescription }} />
+          ))}
+        </div>
+      )}
     </main>
   );
 }

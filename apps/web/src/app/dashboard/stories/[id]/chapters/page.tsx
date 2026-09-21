@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { api, type ChapterRecord } from "@/lib/api-client";
+import { StatusBadge } from "@/components/StatusBadge";
 
 export default function ChaptersListPage() {
   const { id } = useParams<{ id: string }>();
@@ -15,19 +16,25 @@ export default function ChaptersListPage() {
 
   return (
     <section>
-      <h1>Danh sách chương</h1>
-      <p>
-        <Link href={`/dashboard/stories/${id}/chapters/new`}>+ Thêm chương mới</Link>
-      </p>
+      <div className="row-between">
+        <h1>Danh sách chương</h1>
+        <Link href={`/dashboard/stories/${id}/chapters/new`} className="btn btn-primary">
+          + Thêm chương mới
+        </Link>
+      </div>
       {chapters === null ? (
-        <p>Đang tải...</p>
+        <p className="text-muted">Đang tải...</p>
       ) : chapters.length === 0 ? (
-        <p>Chưa có chương nào.</p>
+        <p className="empty-state">Chưa có chương nào.</p>
       ) : (
-        <ol>
+        <ol className="chapter-list">
           {chapters.map((chapter) => (
             <li key={chapter.id}>
-              <Link href={`/dashboard/stories/${id}/chapters/${chapter.id}`}>{chapter.title}</Link> — {chapter.status} ({chapter.wordCount} từ, {chapter.readingTimeMinutes} phút)
+              <Link href={`/dashboard/stories/${id}/chapters/${chapter.id}`}>{chapter.title}</Link>
+              <span className="text-sm text-muted">
+                {" "}
+                — <StatusBadge status={chapter.status} /> ({chapter.wordCount} từ, {chapter.readingTimeMinutes} phút)
+              </span>
             </li>
           ))}
         </ol>

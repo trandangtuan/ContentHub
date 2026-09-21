@@ -11,7 +11,7 @@ export default function AdminSeoHealthPage() {
     api.admin.getSeoHealth().then(setHealth);
   }, []);
 
-  if (!health) return <p>Đang tải...</p>;
+  if (!health) return <p className="text-muted">Đang tải...</p>;
 
   const rows: { label: string; value: number; warn: boolean }[] = [
     { label: "Tổng số truyện public đã publish", value: health.totalPublic, warn: false },
@@ -28,9 +28,9 @@ export default function AdminSeoHealthPage() {
       <table>
         <tbody>
           {rows.map((r) => (
-            <tr key={r.label} style={r.warn ? { color: "#b0402a", fontWeight: "bold" } : undefined}>
+            <tr key={r.label}>
               <td>{r.label}</td>
-              <td>{r.value}</td>
+              <td>{r.warn ? <span className="badge badge-warning">{r.value}</span> : r.value}</td>
             </tr>
           ))}
         </tbody>

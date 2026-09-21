@@ -4,6 +4,7 @@ import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useSession } from "@/lib/use-session";
 import { api, type AdminReport } from "@/lib/api-client";
+import { StatusBadge } from "@/components/StatusBadge";
 
 const ACTIONS = ["PUBLISH", "UNPUBLISH", "DELETE", "RESTORE", "NOINDEX", "SUSPEND_CREATOR", "REACTIVATE_USER"];
 
@@ -62,18 +63,20 @@ function AdminReportsPageInner() {
   return (
     <section>
       <h1>Reports</h1>
-      <select value={status} onChange={(e) => setStatus(e.target.value)}>
-        <option value="">Tất cả</option>
-        <option value="OPEN">OPEN</option>
-        <option value="REVIEWING">REVIEWING</option>
-        <option value="RESOLVED">RESOLVED</option>
-        <option value="REJECTED">REJECTED</option>
-      </select>
+      <div className="filter-bar">
+        <select value={status} onChange={(e) => setStatus(e.target.value)}>
+          <option value="">Tất cả</option>
+          <option value="OPEN">OPEN</option>
+          <option value="REVIEWING">REVIEWING</option>
+          <option value="RESOLVED">RESOLVED</option>
+          <option value="REJECTED">REJECTED</option>
+        </select>
+      </div>
 
       {reports === null ? (
-        <p>Đang tải...</p>
+        <p className="text-muted">Đang tải...</p>
       ) : reports.length === 0 ? (
-        <p>Không có report nào.</p>
+        <p className="empty-state">Không có report nào.</p>
       ) : (
         <table>
           <thead>
@@ -93,19 +96,21 @@ function AdminReportsPageInner() {
                 <td title={r.targetId}>{r.targetId.slice(0, 8)}…</td>
                 <td>{r.reason}</td>
                 <td>{r.reporter.email}</td>
-                <td>{r.status}</td>
+                <td>
+                  <StatusBadge status={r.status} />
+                </td>
                 <td>
                   {r.status === "OPEN" && (
-                    <button type="button" onClick={() => review(r.id)}>
+                    <button type="button" className="btn btn-sm" onClick={() => review(r.id)}>
                       Review
                     </button>
                   )}{" "}
                   {(r.status === "OPEN" || r.status === "REVIEWING") && (
                     <>
-                      <button type="button" onClick={() => resolveWithAction(r)}>
+                      <button type="button" className="btn btn-sm btn-primary" onClick={() => resolveWithAction(r)}>
                         Resolve with action
                       </button>{" "}
-                      <button type="button" onClick={() => reject(r.id)}>
+                      <button type="button" className="btn btn-sm" onClick={() => reject(r.id)}>
                         Reject
                       </button>
                     </>
