@@ -91,13 +91,18 @@ autosave/revisions, publish/unpublish/schedule, public SSR reader,
 SEO surface (metadata, JSON-LD, canonical, robots.txt, sitemap index,
 llms.txt), Postgres full-text search, view-event ingestion queue + daily
 aggregation, revenue pool splitting + wallet ledger math, moderation
-reports/actions with audit trail.
+reports/actions with audit trail, and an admin console (`/admin`) covering
+users, cross-creator story moderation, reports, versioned revenue
+configuration, wallet adjustments, payouts, and SEO health — every
+mutation there goes through the same audited moderation-action / wallet-
+ledger code paths as everywhere else (see docs/ARCHITECTURE.md's "Admin
+surface").
 
 Deliberately out of scope for this pass (see docs/ARCHITECTURE.md
 "Implementation status" for the full list and why): a running BullMQ worker
 process wired into `docker-compose.yml`, fraud/bot detection beyond the
 qualification thresholds, real payment-provider integrations (a
-`ManualPaymentProvider` stands in), an admin UI (the moderation/revenue-
-config *logic* exists and is tested; there's no dashboard screen for it
-yet), and an OpenSearch `SearchProvider` implementation (the interface is
-ready for one).
+`ManualPaymentProvider` stands in), revenue-period lifecycle automation
+(OPEN→...→FINALIZED runs by admin action today, not a scheduler), and an
+OpenSearch `SearchProvider` implementation (the interface is ready for
+one).

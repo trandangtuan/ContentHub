@@ -1,3 +1,4 @@
+import "./bigint-json.js";
 import Fastify, { type FastifyInstance } from "fastify";
 import cors from "@fastify/cors";
 import cookie from "@fastify/cookie";
@@ -10,6 +11,7 @@ import { registerAuthRoutes } from "./routes/auth.js";
 import { registerCreatorRoutes } from "./routes/creator.js";
 import { registerPublicRoutes } from "./routes/public.js";
 import { registerEventRoutes } from "./routes/events.js";
+import { registerAdminRoutes } from "./routes/admin.js";
 
 export function buildApp(config: ApiConfig): FastifyInstance {
   const app = Fastify({ logger: false, trustProxy: true });
@@ -45,6 +47,7 @@ export function buildApp(config: ApiConfig): FastifyInstance {
       registerCreatorRoutes(v1);
       registerPublicRoutes(v1);
       registerEventRoutes(v1, config);
+      registerAdminRoutes(v1);
     },
     { prefix: "/api/v1" },
   );

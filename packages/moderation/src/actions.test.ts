@@ -93,6 +93,22 @@ describe("applyModerationAction", () => {
     expect(updated.status).toBe("SUSPENDED");
   });
 
+  it("REACTIVATE_USER on a USER target restores ACTIVE status", async () => {
+    const suffix = Date.now();
+    const targetUser = await prisma.user.create({
+      data: { email: `reactivate-${suffix}@contenthub.dev`, passwordHash: "x", displayName: "To Reactivate", status: "SUSPENDED" },
+    });
+    await applyModerationAction(prisma, {
+      moderatorUserId,
+      targetType: "USER",
+      targetId: targetUser.id,
+      action: "REACTIVATE_USER",
+      reason: "Appeal approved",
+    });
+    const updated = await prisma.user.findUniqueOrThrow({ where: { id: targetUser.id } });
+    expect(updated.status).toBe("ACTIVE");
+  });
+
   it("resolves the linked report, if any", async () => {
     const content = await createTestContent();
     const report = await createModerationReport(prisma, {

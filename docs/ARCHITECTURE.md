@@ -180,6 +180,50 @@ exist and are already tested.
    resulting available/pending/paid balances — always from the ledger, never
    from a mutable "balance" field treated as the source of truth.
 
+## Admin surface
+
+`apps/api/src/routes/admin.ts` and `apps/web/src/app/admin/**` implement
+spec §40/§75's Admin dashboard: Users, Stories (any status, any creator),
+Reports, Revenue configuration, Payouts, and SEO Health. It's a third route
+tree alongside the public reader and the creator dashboard — client-
+rendered like `/dashboard`, RBAC-gated both in the browser (for UX — a
+non-admin sees a message, not a broken page) and, the part that actually
+matters, on every API call (`app.requireRole(request, "MODERATOR" |
+"ADMIN")`).
+
+Every state-changing admin action goes through one of two existing,
+already-audited code paths rather than a bespoke "just update the row":
+
+- **Content/user moderation** (publish/unpublish/delete/restore/noindex a
+  story; suspend/reactivate a user) → `packages/moderation`'s
+  `applyModerationAction`, which always writes a `moderation_actions` row
+  in the same transaction as the effect (spec §40's "every financial/
+  moderation adjustment must have an audit log").
+- **Anything touching a wallet** (marking a payout PAID/REVERSED, or a
+  manual "adjust revenue" correction) → `packages/revenue`'s
+  `WalletLedger.appendEntry`, which always writes an immutable
+  `wallet_transactions` row before the wallet's cached balance changes.
+  Marking a payout PAID is refused with `409` if the creator's available
+  balance can't cover it — the admin UI can't accidentally pay out more
+  than a creator has earned.
+
+Revenue configuration (`revenue_configs`) is admin-creatable through this
+surface too: `POST /admin/revenue-configs` validates the three percentages
+sum to exactly 100 and auto-increments `version` — there's still no way to
+edit a percentage in place, only add a new version (spec §72).
+
+`GET /admin/seo-health` is a real implementation of spec §75's SEO Health
+page: counts of published stories missing a description/cover, currently
+noindexed, with a duplicate slug (should always be 0 — the schema's unique
+constraint makes this a should-never-happen check, not a real risk), or
+published with no published chapter yet (thin content).
+
+Not built as part of the admin surface: a `Views`/`Payouts` deep-dive
+beyond what's listed above, and no server-rendered "broken links" or
+"broken canonical" crawl (spec §75 also lists these; they'd need an actual
+crawl of the public site, which is a bigger piece of infrastructure than
+the rest of this table's gaps).
+
 ## Implementation status
 
 Everything above the "Deliberately out of scope" line in the README is
@@ -192,7 +236,6 @@ built in this pass, and why:
 | Revenue period lifecycle automation (OPEN→CALCULATING→FRAUD_REVIEW→FINALIZED→PAYOUT_AVAILABLE) | The `RevenuePool.status` enum and the calculation functions exist; the state machine that walks a period through these stages on a schedule doesn't. | `splitRevenuePool`/`allocateCreatorPool`/`WalletLedger` (`packages/revenue`). |
 | Fraud/bot detection beyond view-qualification thresholds | Out of scope for an MVP; the qualification pipeline has the seam (`RawViewEvent.isSuspectedBot`) for a real detector to plug into. | `qualifyView` treats every non-bot-flagged session as valid/qualified per duration+scroll thresholds. |
 | A real `PaymentProvider` (bank transfer/Stripe/etc.) | The interface is the point — swapping providers shouldn't touch calling code. | `ManualPaymentProvider` (records payouts as pending for back-office processing). |
-| Admin dashboard UI | The underlying logic (moderation actions, revenue config, SEO health data) is implemented in `packages/moderation` / `packages/revenue` and covered by tests; there's no `/admin` screen calling it yet. | Direct package/API usage. |
 | OpenSearch `SearchProvider` | `PostgresSearchProvider` is the MVP implementation the spec calls for; the interface (`packages/search`) is what a second implementation would satisfy. | `PostgresSearchProvider`. |
 | Client-side view-event beacon in the reader page | The ingestion endpoint (`POST /api/v1/events/view`) is built and tested; the `apps/web` reader page doesn't yet call it. | — |
 | 410 Gone distinction in `apps/web` pages | `apps/api`'s public routes correctly return 410 for soft-deleted content vs. 404 for never-existed (tested). Server Components can only call `notFound()` (always 404) without middleware; that middleware wasn't built this pass. | API-level 404/410 tests. |
