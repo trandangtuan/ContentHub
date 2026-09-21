@@ -1,0 +1,706 @@
+// ContentHub database schema
+// Design notes:
+// - Every table has id/created_at/updated_at; soft-deletable entities also have deleted_at.
+// - `Content` is the core polymorphic entity (User/Creator/Content/ContentPart/View/Revenue/Wallet/Payout —
+//   see docs/ARCHITECTURE.md). `Story` is a 1:1 extension of Content for type=STORY.
+//   Adding ARTICLE/COMIC/VIDEO/AUDIO/PODCAST later means adding a new extension table + enum value,
+//   not rewriting Content/ContentPart/View/Revenue.
+// - Money is stored as integer cents (BigInt) with an explicit currency column. Percentages are Decimal.
+// - Revenue/wallet state is derived from immutable ledgers (RevenueTransaction, WalletTransaction);
+//   Wallet.balance* columns are caches, never the source of truth.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Enums
+// ────────────────────────────────────────────────────────────────────────────
+
+enum UserRole {
+  READER
+  CREATOR
+  MODERATOR
+  ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  BANNED
+}
+
+enum ContentType {
+  STORY
+  ARTICLE
+  COMIC
+  VIDEO
+  AUDIO
+  PODCAST
+}
+
+enum ContentStatus {
+  DRAFT
+  PENDING_REVIEW
+  PUBLISHED
+  UNPUBLISHED
+  REJECTED
+  ARCHIVED
+}
+
+enum ContentVisibility {
+  PUBLIC
+  PRIVATE
+  UNLISTED
+}
+
+enum ContentPartStatus {
+  DRAFT
+  SCHEDULED
+  PUBLISHED
+  UNPUBLISHED
+}
+
+enum CommentStatus {
+  PUBLISHED
+  PENDING
+  HIDDEN
+  DELETED
+}
+
+enum ReportTargetType {
+  CONTENT
+  CONTENT_PART
+  USER
+  COMMENT
+}
+
+enum ReportStatus {
+  OPEN
+  REVIEWING
+  RESOLVED
+  REJECTED
+}
+
+enum RevenuePeriodStatus {
+  OPEN
+  CALCULATING
+  FRAUD_REVIEW
+  FINALIZED
+  PAYOUT_AVAILABLE
+}
+
+enum WalletTransactionType {
+  VIEW_REVENUE
+  AD_REVENUE
+  TIP
+  SUBSCRIPTION
+  PAYOUT
+  REFUND
+  ADJUSTMENT
+  FRAUD_REVERSAL
+}
+
+enum PayoutStatus {
+  PENDING
+  PROCESSING
+  PAID
+  FAILED
+  REVERSED
+}
+
+enum SummaryOrigin {
+  CREATOR
+  AI_GENERATED
+  SYSTEM_GENERATED
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// User / Creator
+// ────────────────────────────────────────────────────────────────────────────
+
+model User {
+  id              String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email           String     @unique
+  passwordHash    String     @map("password_hash")
+  displayName     String     @map("display_name")
+  avatarUrl       String?    @map("avatar_url")
+  role            UserRole   @default(READER)
+  status          UserStatus @default(ACTIVE)
+  emailVerifiedAt DateTime?  @map("email_verified_at")
+  locale          String     @default("vi")
+  createdAt       DateTime   @default(now()) @map("created_at")
+  updatedAt       DateTime   @updatedAt @map("updated_at")
+  deletedAt       DateTime?  @map("deleted_at")
+
+  creatorProfile     CreatorProfile?
+  sessions           Session[]
+  follows            Follow[]
+  likes              Like[]
+  comments           Comment[]
+  moderationReports  ModerationReport[]  @relation("Reporter")
+  moderationActions  ModerationAction[]  @relation("Moderator")
+  contentVersions    ContentVersion[]
+
+  @@index([status])
+  @@map("users")
+}
+
+model CreatorProfile {
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId            String    @unique @map("user_id") @db.Uuid
+  slug              String    @unique
+  displayName       String    @map("display_name")
+  bio               String?
+  avatarUrl         String?   @map("avatar_url")
+  isOrganization    Boolean   @default(false) @map("is_organization")
+  ownershipNotice   String?   @map("ownership_notice")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+  deletedAt         DateTime? @map("deleted_at")
+
+  user            User             @relation(fields: [userId], references: [id])
+  contents        Content[]
+  follows         Follow[]
+  wallet          Wallet?
+  creatorRevenues CreatorRevenue[]
+  payoutAccounts  PayoutAccount[]
+  payouts         Payout[]
+
+  @@index([slug])
+  @@map("creator_profiles")
+}
+
+model Session {
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  tokenHash String    @unique @map("token_hash")
+  userAgent String?   @map("user_agent")
+  ipHash    String?   @map("ip_hash")
+  expiresAt DateTime  @map("expires_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  revokedAt DateTime? @map("revoked_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Content (polymorphic core) + Story extension
+// ────────────────────────────────────────────────────────────────────────────
+
+model Content {
+  id               String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  creatorId        String            @map("creator_id") @db.Uuid
+  type             ContentType
+  title            String
+  slug             String            @unique
+  description      String?
+  shortDescription String?           @map("short_description")
+  coverImage       String?           @map("cover_image")
+  status           ContentStatus     @default(DRAFT)
+  visibility       ContentVisibility @default(PRIVATE)
+  language         String            @default("vi")
+  publishedAt      DateTime?         @map("published_at")
+  createdAt        DateTime          @default(now()) @map("created_at")
+  updatedAt        DateTime          @updatedAt @map("updated_at")
+  deletedAt        DateTime?         @map("deleted_at")
+
+  creator         CreatorProfile     @relation(fields: [creatorId], references: [id])
+  story           Story?
+  parts           ContentPart[]
+  categories      ContentCategory[]
+  tags            ContentTag[]
+  follows         Follow[]
+  likes           Like[]
+  comments        Comment[]
+  events          ContentEvent[]
+  views           ContentView[]
+  creatorRevenues CreatorRevenue[]
+  seoMetadata     SeoMetadata?
+  redirects       Redirect[]
+
+  /// Maintained by a DB trigger (see migration 002) from title/description.
+  /// MVP full-text search target; swap for OpenSearch by implementing
+  /// packages/search's SearchProvider without touching this column.
+  searchVector Unsupported("tsvector")? @map("search_vector")
+
+  @@index([creatorId])
+  @@index([status])
+  @@index([publishedAt])
+  @@index([status, visibility, publishedAt])
+  @@index([searchVector], type: Gin)
+  @@map("contents")
+}
+
+/// Type-specific extension for Content.type = STORY. A future ARTICLE/VIDEO/etc.
+/// extension follows the same 1:1-with-Content pattern.
+model Story {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  contentId   String    @unique @map("content_id") @db.Uuid
+  subtitle    String?
+  ageRating   String?   @map("age_rating")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  deletedAt   DateTime? @map("deleted_at")
+
+  content Content @relation(fields: [contentId], references: [id])
+
+  @@map("stories")
+}
+
+/// A unit of content within a Content item — a Story chapter today; an Article
+/// section, Video episode, or Podcast episode later reuses the same table.
+model ContentPart {
+  id                 String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  contentId          String            @map("content_id") @db.Uuid
+  title              String
+  slug               String
+  position           Int
+  bodyJson           Json?             @map("body_json")
+  bodyHtml           String?           @map("body_html")
+  wordCount          Int               @default(0) @map("word_count")
+  readingTimeMinutes Int               @default(0) @map("reading_time_minutes")
+  status             ContentPartStatus @default(DRAFT)
+  scheduledAt        DateTime?         @map("scheduled_at")
+  publishedAt        DateTime?         @map("published_at")
+  createdAt          DateTime          @default(now()) @map("created_at")
+  updatedAt          DateTime          @updatedAt @map("updated_at")
+  deletedAt          DateTime?         @map("deleted_at")
+
+  content  Content          @relation(fields: [contentId], references: [id])
+  versions ContentVersion[]
+  comments Comment[]
+  events   ContentEvent[]
+  views    ContentView[]
+
+  @@unique([contentId, slug])
+  @@index([contentId])
+  @@index([contentId, position])
+  @@index([status])
+  @@map("content_parts")
+}
+
+model ContentVersion {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  contentPartId String   @map("content_part_id") @db.Uuid
+  versionNumber Int      @map("version_number")
+  bodyJson      Json?    @map("body_json")
+  bodyHtml      String?  @map("body_html")
+  wordCount     Int      @default(0) @map("word_count")
+  createdById   String?  @map("created_by_id") @db.Uuid
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  contentPart ContentPart @relation(fields: [contentPartId], references: [id])
+  createdBy   User?       @relation(fields: [createdById], references: [id])
+
+  @@unique([contentPartId, versionNumber])
+  @@map("content_versions")
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Taxonomy
+// ────────────────────────────────────────────────────────────────────────────
+
+model Category {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  slug        String    @unique
+  name        String
+  description String?
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  deletedAt   DateTime? @map("deleted_at")
+
+  contents ContentCategory[]
+
+  @@map("categories")
+}
+
+model ContentCategory {
+  contentId  String @map("content_id") @db.Uuid
+  categoryId String @map("category_id") @db.Uuid
+
+  content  Content  @relation(fields: [contentId], references: [id])
+  category Category @relation(fields: [categoryId], references: [id])
+
+  @@id([contentId, categoryId])
+  @@index([categoryId])
+  @@map("content_categories")
+}
+
+model Tag {
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  slug      String    @unique
+  name      String
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  contents ContentTag[]
+
+  @@map("tags")
+}
+
+model ContentTag {
+  contentId String @map("content_id") @db.Uuid
+  tagId     String @map("tag_id") @db.Uuid
+
+  content Content @relation(fields: [contentId], references: [id])
+  tag     Tag     @relation(fields: [tagId], references: [id])
+
+  @@id([contentId, tagId])
+  @@index([tagId])
+  @@map("content_tags")
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Social
+// ────────────────────────────────────────────────────────────────────────────
+
+model Follow {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  creatorId String   @map("creator_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user    User           @relation(fields: [userId], references: [id])
+  creator CreatorProfile @relation(fields: [creatorId], references: [id])
+
+  // extra column kept nullable/unused today; reserved so a Content can be followed later
+  // without a migration that changes the identity of this table.
+  content   Content? @relation(fields: [contentId], references: [id])
+  contentId String?  @map("content_id") @db.Uuid
+
+  @@unique([userId, creatorId])
+  @@index([userId])
+  @@index([creatorId])
+  @@map("follows")
+}
+
+model Like {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  contentId String   @map("content_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user    User    @relation(fields: [userId], references: [id])
+  content Content @relation(fields: [contentId], references: [id])
+
+  @@unique([userId, contentId])
+  @@index([contentId])
+  @@map("likes")
+}
+
+model Comment {
+  id            String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  contentId     String        @map("content_id") @db.Uuid
+  contentPartId String?       @map("content_part_id") @db.Uuid
+  userId        String        @map("user_id") @db.Uuid
+  parentId      String?       @map("parent_id") @db.Uuid
+  depth         Int           @default(0)
+  body          String
+  status        CommentStatus @default(PUBLISHED)
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+  deletedAt     DateTime?     @map("deleted_at")
+
+  content     Content      @relation(fields: [contentId], references: [id])
+  contentPart ContentPart? @relation(fields: [contentPartId], references: [id])
+  user        User         @relation(fields: [userId], references: [id])
+  parent      Comment?     @relation("CommentReplies", fields: [parentId], references: [id])
+  replies     Comment[]    @relation("CommentReplies")
+
+  @@index([contentId])
+  @@index([contentPartId])
+  @@index([parentId])
+  @@map("comments")
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// View tracking / analytics
+// (RAW VIEW -> VALID VIEW -> QUALIFIED VIEW -> MONETIZED VIEW; see docs/REVENUE.md)
+// ────────────────────────────────────────────────────────────────────────────
+
+/// Short-retention raw event log fed by the /events/view ingestion endpoint via
+/// a queue. Never used directly for revenue — aggregation workers roll this up
+/// into ContentView. sessionIdHash/ipHash are hashed, never raw.
+model ContentEvent {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  contentId     String   @map("content_id") @db.Uuid
+  contentPartId String?  @map("content_part_id") @db.Uuid
+  sessionIdHash String   @map("session_id_hash")
+  userId        String?  @map("user_id") @db.Uuid
+  eventType     String   @map("event_type")
+  occurredAt    DateTime @map("occurred_at")
+  durationSec   Int?     @map("duration_sec")
+  scrollDepth   Float?   @map("scroll_depth")
+  ipHash        String?  @map("ip_hash")
+  metadata      Json?
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  content     Content      @relation(fields: [contentId], references: [id])
+  contentPart ContentPart? @relation(fields: [contentPartId], references: [id])
+
+  @@index([contentId, createdAt])
+  @@index([occurredAt])
+  @@map("content_events")
+}
+
+/// Daily aggregate produced by the aggregation worker from ContentEvent.
+/// This — not ContentEvent — is what analytics/revenue calculations read.
+model ContentView {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  contentId       String   @map("content_id") @db.Uuid
+  contentPartId   String?  @map("content_part_id") @db.Uuid
+  date            DateTime @db.Date
+  rawViews        Int      @default(0) @map("raw_views")
+  validViews      Int      @default(0) @map("valid_views")
+  qualifiedViews  Int      @default(0) @map("qualified_views")
+  monetizedViews  Int      @default(0) @map("monetized_views")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  content     Content      @relation(fields: [contentId], references: [id])
+  contentPart ContentPart? @relation(fields: [contentPartId], references: [id])
+
+  @@unique([contentId, contentPartId, date])
+  @@index([contentId])
+  @@index([contentId, date])
+  @@map("content_views")
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Revenue / Wallet / Payout
+// ────────────────────────────────────────────────────────────────────────────
+
+/// Versioned, admin-configurable split. Never hard-code percentages in code.
+model RevenueConfig {
+  id                        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  version                   Int      @unique
+  creatorPoolPercentage     Decimal  @map("creator_pool_percentage") @db.Decimal(5, 2)
+  platformPercentage        Decimal  @map("platform_percentage") @db.Decimal(5, 2)
+  fraudReservePercentage    Decimal  @map("fraud_reserve_percentage") @db.Decimal(5, 2)
+  minimumPayoutThresholdCents BigInt @map("minimum_payout_threshold_cents")
+  currency                  String   @default("VND")
+  effectiveFrom             DateTime @map("effective_from")
+  createdAt                 DateTime @default(now()) @map("created_at")
+  createdById                String?  @map("created_by_id") @db.Uuid
+
+  @@map("revenue_configs")
+}
+
+/// One row per YYYY-MM period. Tracks the period lifecycle:
+/// OPEN -> CALCULATING -> FRAUD_REVIEW -> FINALIZED -> PAYOUT_AVAILABLE
+model RevenuePool {
+  id                String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  period            String              @unique // "YYYY-MM"
+  totalAmountCents  BigInt              @map("total_amount_cents")
+  currency          String              @default("VND")
+  revenueConfigId   String              @map("revenue_config_id") @db.Uuid
+  status            RevenuePeriodStatus @default(OPEN)
+  createdAt         DateTime            @default(now()) @map("created_at")
+  updatedAt         DateTime            @updatedAt @map("updated_at")
+
+  creatorRevenues CreatorRevenue[]
+  transactions    RevenueTransaction[]
+
+  @@map("revenue_pools")
+}
+
+model CreatorRevenue {
+  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  revenuePoolId     String   @map("revenue_pool_id") @db.Uuid
+  creatorId         String   @map("creator_id") @db.Uuid
+  contentId         String?  @map("content_id") @db.Uuid
+  qualifiedViews    Int      @map("qualified_views")
+  sharePercentage   Decimal  @map("share_percentage") @db.Decimal(7, 4)
+  amountCents       BigInt   @map("amount_cents")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  revenuePool RevenuePool    @relation(fields: [revenuePoolId], references: [id])
+  creator     CreatorProfile @relation(fields: [creatorId], references: [id])
+  content     Content?       @relation(fields: [contentId], references: [id])
+
+  @@unique([revenuePoolId, creatorId, contentId])
+  @@index([creatorId])
+  @@map("creator_revenue")
+}
+
+/// Immutable audit trail of every movement into/out of a RevenuePool.
+model RevenueTransaction {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  revenuePoolId String?  @map("revenue_pool_id") @db.Uuid
+  creatorId     String?  @map("creator_id") @db.Uuid
+  contentId     String?  @map("content_id") @db.Uuid
+  type          String
+  amountCents   BigInt   @map("amount_cents")
+  currency      String   @default("VND")
+  description   String?
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  revenuePool RevenuePool? @relation(fields: [revenuePoolId], references: [id])
+
+  @@index([revenuePoolId])
+  @@index([creatorId])
+  @@map("revenue_transactions")
+}
+
+model Wallet {
+  id                     String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  creatorId              String   @unique @map("creator_id") @db.Uuid
+  balanceAvailableCents  BigInt   @default(0) @map("balance_available_cents")
+  balancePendingCents    BigInt   @default(0) @map("balance_pending_cents")
+  balancePaidCents       BigInt   @default(0) @map("balance_paid_cents")
+  currency               String   @default("VND")
+  createdAt              DateTime @default(now()) @map("created_at")
+  updatedAt              DateTime @updatedAt @map("updated_at")
+
+  creator      CreatorProfile      @relation(fields: [creatorId], references: [id])
+  transactions WalletTransaction[]
+
+  @@map("wallets")
+}
+
+/// Immutable ledger — the source of truth for balances. Wallet.balance* are caches
+/// recomputed from this table; never write to them directly outside the ledger writer.
+model WalletTransaction {
+  id                String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  walletId          String                @map("wallet_id") @db.Uuid
+  type              WalletTransactionType
+  amountCents       BigInt                @map("amount_cents")
+  currency          String                @default("VND")
+  balanceAfterCents BigInt                @map("balance_after_cents")
+  relatedPayoutId   String?               @map("related_payout_id") @db.Uuid
+  description       String?
+  createdAt         DateTime              @default(now()) @map("created_at")
+
+  wallet Wallet @relation(fields: [walletId], references: [id])
+
+  @@index([walletId])
+  @@index([walletId, createdAt])
+  @@map("wallet_transactions")
+}
+
+model PayoutAccount {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  creatorId      String    @map("creator_id") @db.Uuid
+  provider       String
+  accountDetails Json      @map("account_details")
+  isDefault      Boolean   @default(false) @map("is_default")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+  deletedAt      DateTime? @map("deleted_at")
+
+  creator CreatorProfile @relation(fields: [creatorId], references: [id])
+  payouts Payout[]
+
+  @@index([creatorId])
+  @@map("payout_accounts")
+}
+
+model Payout {
+  id              String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  creatorId       String       @map("creator_id") @db.Uuid
+  payoutAccountId String       @map("payout_account_id") @db.Uuid
+  amountCents     BigInt       @map("amount_cents")
+  currency        String       @default("VND")
+  status          PayoutStatus @default(PENDING)
+  periodStart     DateTime     @map("period_start") @db.Date
+  periodEnd       DateTime     @map("period_end") @db.Date
+  requestedAt     DateTime     @default(now()) @map("requested_at")
+  processedAt     DateTime?    @map("processed_at")
+  failureReason   String?      @map("failure_reason")
+  createdAt       DateTime     @default(now()) @map("created_at")
+  updatedAt       DateTime     @updatedAt @map("updated_at")
+
+  creator       CreatorProfile @relation(fields: [creatorId], references: [id])
+  payoutAccount PayoutAccount  @relation(fields: [payoutAccountId], references: [id])
+
+  @@index([creatorId])
+  @@index([status])
+  @@map("payouts")
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Moderation
+// ────────────────────────────────────────────────────────────────────────────
+
+model ModerationReport {
+  id             String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  reporterUserId String           @map("reporter_user_id") @db.Uuid
+  targetType     ReportTargetType @map("target_type")
+  targetId       String           @map("target_id") @db.Uuid
+  reason         String
+  details        String?
+  status         ReportStatus     @default(OPEN)
+  createdAt      DateTime         @default(now()) @map("created_at")
+  updatedAt      DateTime         @updatedAt @map("updated_at")
+
+  reporter User               @relation("Reporter", fields: [reporterUserId], references: [id])
+  actions  ModerationAction[]
+
+  @@index([status])
+  @@index([targetType, targetId])
+  @@map("moderation_reports")
+}
+
+model ModerationAction {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  reportId       String?   @map("report_id") @db.Uuid
+  moderatorUserId String   @map("moderator_user_id") @db.Uuid
+  targetType     ReportTargetType @map("target_type")
+  targetId       String    @map("target_id") @db.Uuid
+  action         String
+  reason         String?
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  report    ModerationReport? @relation(fields: [reportId], references: [id])
+  moderator User              @relation("Moderator", fields: [moderatorUserId], references: [id])
+
+  @@index([targetType, targetId])
+  @@map("moderation_actions")
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// SEO
+// ────────────────────────────────────────────────────────────────────────────
+
+model SeoMetadata {
+  id                   String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  contentId            String         @unique @map("content_id") @db.Uuid
+  seoTitle             String?        @map("seo_title")
+  seoDescription       String?        @map("seo_description")
+  ogImage              String?        @map("og_image")
+  noindex              Boolean        @default(false)
+  aiSummary            String?        @map("ai_summary")
+  aiSummaryOrigin      SummaryOrigin? @map("ai_summary_origin")
+  aiSummaryGeneratedAt DateTime?      @map("ai_summary_generated_at")
+  createdAt            DateTime       @default(now()) @map("created_at")
+  updatedAt            DateTime       @updatedAt @map("updated_at")
+
+  content Content @relation(fields: [contentId], references: [id])
+
+  @@map("seo_metadata")
+}
+
+model Redirect {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  fromPath   String   @unique @map("from_path")
+  toPath     String   @map("to_path")
+  statusCode Int      @default(301) @map("status_code")
+  contentId  String?  @map("content_id") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  content Content? @relation(fields: [contentId], references: [id])
+
+  @@index([contentId])
+  @@map("redirects")
+}
