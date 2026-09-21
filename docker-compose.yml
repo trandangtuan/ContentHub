@@ -1,0 +1,81 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: contenthub_dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/contenthub_dev
+      REDIS_URL: redis://redis:6379
+      SITE_URL: ${SITE_URL:-http://localhost:3000}
+      API_PORT: 4000
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+      SESSION_SECRET: ${SESSION_SECRET:?SESSION_SECRET must be set — see .env.example}
+      JWT_SECRET: ${JWT_SECRET:-${SESSION_SECRET}}
+      SESSION_COOKIE_NAME: ${SESSION_COOKIE_NAME:-ch_session}
+      SESSION_TTL_DAYS: ${SESSION_TTL_DAYS:-30}
+      RATE_LIMIT_MAX: ${RATE_LIMIT_MAX:-100}
+      RATE_LIMIT_WINDOW_MS: ${RATE_LIMIT_WINDOW_MS:-60000}
+    ports:
+      - "4000:4000"
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        SITE_URL: ${SITE_URL:-http://localhost:3000}
+        NEXT_PUBLIC_SITE_URL: ${SITE_URL:-http://localhost:3000}
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4000}
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      api:
+        condition: service_started
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/contenthub_dev
+      SITE_URL: ${SITE_URL:-http://localhost:3000}
+      NEXT_PUBLIC_SITE_URL: ${SITE_URL:-http://localhost:3000}
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4000}
+      SESSION_SECRET: ${SESSION_SECRET:?SESSION_SECRET must be set — see .env.example}
+      GOOGLE_SITE_VERIFICATION: ${GOOGLE_SITE_VERIFICATION:-}
+      GA_MEASUREMENT_ID: ${GA_MEASUREMENT_ID:-}
+    ports:
+      - "3000:3000"
+
+volumes:
+  postgres_data:

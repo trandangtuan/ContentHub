@@ -1,3 +1,6 @@
+// Reads live data from Postgres on every request; never statically cached at build time (docs/SEO.md — SSR-first, always-fresh).
+export const dynamic = "force-dynamic";
+
 import { prisma } from "@contenthub/database";
 import { buildLlmsFullTxt } from "@contenthub/seo";
 import { getSeoConfig } from "@/lib/seo-config";

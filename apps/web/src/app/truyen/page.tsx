@@ -1,3 +1,6 @@
+// Reads live data from Postgres on every request; never statically cached at build time (docs/SEO.md — SSR-first, always-fresh).
+export const dynamic = "force-dynamic";
+
 import type { Metadata } from "next";
 import { buildPageMetadata, getRobotsMetadata } from "@contenthub/seo";
 import { getSeoConfig } from "@/lib/seo-config";
