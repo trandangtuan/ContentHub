@@ -9,6 +9,11 @@
 # `pnpm typecheck`. Splitting packages into their own build steps is a
 # natural next hardening step, not required for the app to run correctly.
 FROM node:20-alpine AS base
+# Prisma's query engine is a separate native binary that dynamically links
+# against the system libssl — node:20-alpine doesn't install the `openssl`
+# apk package by default, so without this the engine can't find libssl.so.3
+# at runtime even with the correct binaryTarget set in schema.prisma.
+RUN apk add --no-cache openssl
 RUN corepack enable
 WORKDIR /repo
 
