@@ -222,6 +222,80 @@ describe("Story + chapter lifecycle", () => {
   });
 });
 
+describe("Categories", () => {
+  it("lets a creator create a category and assign it to their story", async () => {
+    const { cookies, csrfToken } = await registerAndBecomeCreator("Category Author");
+
+    const createCategory = await app.inject({
+      method: "POST",
+      url: "/api/v1/creator/categories",
+      cookies,
+      headers: { "x-csrf-token": csrfToken },
+      payload: { name: `Tiên Hiệp ${runSuffix}` },
+    });
+    expect(createCategory.statusCode).toBe(201);
+    const category = createCategory.json();
+
+    const list = await app.inject({ method: "GET", url: "/api/v1/creator/categories", cookies });
+    expect(list.json().categories.map((c: { id: string }) => c.id)).toContain(category.id);
+
+    const createStory = await app.inject({
+      method: "POST",
+      url: "/api/v1/creator/stories",
+      cookies,
+      headers: { "x-csrf-token": csrfToken },
+      payload: { title: `Category Story ${runSuffix}`, description: "d", categoryIds: [category.id] },
+    });
+    expect(createStory.statusCode).toBe(201);
+    const story = createStory.json();
+    expect(story.categories).toHaveLength(1);
+    expect(story.categories[0].category.id).toBe(category.id);
+  });
+
+  it("returns the same category instead of a duplicate when the name already exists (case-insensitive)", async () => {
+    const { cookies, csrfToken } = await registerAndBecomeCreator("Dedup Author");
+    const name = `Kiếm Hiệp ${runSuffix}`;
+
+    const first = await app.inject({
+      method: "POST",
+      url: "/api/v1/creator/categories",
+      cookies,
+      headers: { "x-csrf-token": csrfToken },
+      payload: { name },
+    });
+    const second = await app.inject({
+      method: "POST",
+      url: "/api/v1/creator/categories",
+      cookies,
+      headers: { "x-csrf-token": csrfToken },
+      payload: { name: name.toUpperCase() },
+    });
+
+    expect(first.json().id).toBe(second.json().id);
+  });
+
+  it("rejects a story update with a category id that doesn't exist", async () => {
+    const { cookies, csrfToken } = await registerAndBecomeCreator("Bad Category Author");
+    const createStory = await app.inject({
+      method: "POST",
+      url: "/api/v1/creator/stories",
+      cookies,
+      headers: { "x-csrf-token": csrfToken },
+      payload: { title: `Bad Category Story ${runSuffix}`, description: "d" },
+    });
+    const story = createStory.json();
+
+    const update = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/creator/stories/${story.id}`,
+      cookies,
+      headers: { "x-csrf-token": csrfToken },
+      payload: { categoryIds: ["00000000-0000-0000-0000-000000000000"] },
+    });
+    expect(update.statusCode).toBe(422);
+  });
+});
+
 describe("GET /api/v1/creator/wallet", () => {
   it("returns available/pending/paid balances, never a bare single number", async () => {
     const { cookies } = await registerAndBecomeCreator("Wallet Author");

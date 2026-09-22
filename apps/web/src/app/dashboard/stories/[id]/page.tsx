@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useSession } from "@/lib/use-session";
 import { api, ApiError, type StoryRecord } from "@/lib/api-client";
 import { StatusBadge } from "@/components/StatusBadge";
+import { CategoryPicker } from "@/components/CategoryPicker";
 
 export default function EditStoryPage() {
   const { id } = useParams<{ id: string }>();
@@ -13,6 +14,7 @@ export default function EditStoryPage() {
   const [story, setStory] = useState<StoryRecord | null>(null);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [categoryIds, setCategoryIds] = useState<string[]>([]);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -21,6 +23,7 @@ export default function EditStoryPage() {
       setStory(s);
       setTitle(s.title);
       setDescription(s.description ?? "");
+      setCategoryIds(s.categories?.map((c) => c.category.id) ?? []);
     });
   }, [id]);
 
@@ -29,7 +32,7 @@ export default function EditStoryPage() {
     if (!session?.csrfToken) return;
     setError(null);
     try {
-      const updated = await api.updateStory(session.csrfToken, id, { title, description });
+      const updated = await api.updateStory(session.csrfToken, id, { title, description, categoryIds });
       setStory(updated);
       setStatus("Đã lưu.");
     } catch (err) {
@@ -82,6 +85,8 @@ export default function EditStoryPage() {
           <input id="title" value={title} onChange={(e) => setTitle(e.target.value)} required maxLength={200} />
           <label htmlFor="description">Mô tả</label>
           <textarea id="description" value={description} onChange={(e) => setDescription(e.target.value)} rows={5} maxLength={5000} />
+          <label>Thể loại</label>
+          <CategoryPicker selectedIds={categoryIds} onChange={setCategoryIds} />
           {error ? <p role="alert">{error}</p> : null}
           {status ? <p className="text-sm text-muted">{status}</p> : null}
           <div className="row">
