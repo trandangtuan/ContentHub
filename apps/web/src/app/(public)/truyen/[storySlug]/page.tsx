@@ -16,7 +16,8 @@ import {
   paths,
 } from "@contenthub/seo";
 import { getSeoConfig } from "@/lib/seo-config";
-import { getStoryBySlug, getPublishedChapters, getStoryViewCount } from "@/lib/public-data";
+import { getStoryBySlug, getPublishedChapters, getStoryViewCount, getRelatedStories, CHAPTER_LIST_PAGE_SIZE } from "@/lib/public-data";
+import { StoryCard } from "@/components/StoryCard";
 import { Breadcrumbs } from "@/components/Breadcrumbs";
 import { JsonLd } from "@/components/JsonLd";
 
@@ -55,11 +56,19 @@ export async function generateMetadata({ params }: { params: Promise<Params> }):
   }) as Metadata;
 }
 
-export default async function StoryPage({ params }: { params: Promise<Params> }) {
+export default async function StoryPage({ params, searchParams }: { params: Promise<Params>; searchParams: Promise<{ page?: string }> }) {
   const { storySlug } = await params;
+  const { page: pageParam } = await searchParams;
   const config = getSeoConfig();
   const story = await loadStoryOr404(storySlug);
-  const [chapters, viewCount] = await Promise.all([getPublishedChapters(story.id), getStoryViewCount(story.id)]);
+  const page = Math.max(1, Number(pageParam ?? 1) || 1);
+
+  const [{ items: chapters, total: totalChapters }, viewCount, relatedStories] = await Promise.all([
+    getPublishedChapters(story.id, { limit: CHAPTER_LIST_PAGE_SIZE, offset: (page - 1) * CHAPTER_LIST_PAGE_SIZE }),
+    getStoryViewCount(story.id),
+    getRelatedStories({ id: story.id, creatorId: story.creatorId, categoryIds: story.categories.map((c) => c.categoryId) }),
+  ]);
+  const totalChapterPages = Math.max(1, Math.ceil(totalChapters / CHAPTER_LIST_PAGE_SIZE));
 
   return (
     <main className="container">
@@ -132,11 +141,11 @@ export default async function StoryPage({ params }: { params: Promise<Params> })
         )}
 
         <section>
-          <h2>Danh sách chương ({chapters.length})</h2>
+          <h2>Danh sách chương ({totalChapters})</h2>
           {chapters.length === 0 ? (
             <p className="empty-state">Chưa có chương nào được xuất bản.</p>
           ) : (
-            <ol className="chapter-list">
+            <ol className="chapter-list" start={(page - 1) * CHAPTER_LIST_PAGE_SIZE + 1}>
               {chapters.map((chapter) => (
                 <li key={chapter.id}>
                   <Link href={paths.chapter(story.slug, chapter.slug)}>{chapter.title}</Link>
@@ -144,7 +153,27 @@ export default async function StoryPage({ params }: { params: Promise<Params> })
               ))}
             </ol>
           )}
+          {totalChapterPages > 1 && (
+            <nav className="pagination" aria-label="Chapter list pagination">
+              {page > 1 ? <a href={`${paths.story(story.slug)}?page=${page - 1}`}>← Trang trước</a> : <span />}
+              <span>
+                Trang {page}/{totalChapterPages}
+              </span>
+              {page < totalChapterPages ? <a href={`${paths.story(story.slug)}?page=${page + 1}`}>Trang sau →</a> : <span />}
+            </nav>
+          )}
         </section>
+
+        {relatedStories.length > 0 && (
+          <section>
+            <h2>Truyện liên quan</h2>
+            <div className="card-grid">
+              {relatedStories.map((related) => (
+                <StoryCard key={related.id} story={{ slug: related.slug, title: related.title, coverImage: related.coverImage, shortDescription: related.shortDescription }} />
+              ))}
+            </div>
+          </section>
+        )}
       </article>
     </main>
   );

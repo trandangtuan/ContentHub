@@ -32,6 +32,12 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+export interface CategoryRecord {
+  id: string;
+  slug: string;
+  name: string;
+}
+
 export interface StoryRecord {
   id: string;
   title: string;
@@ -40,6 +46,7 @@ export interface StoryRecord {
   status: string;
   visibility: string;
   publishedAt: string | null;
+  categories?: { category: CategoryRecord }[];
 }
 
 export interface ChapterRecord {
@@ -157,6 +164,10 @@ export const api = {
   createCreatorProfile: (csrfToken: string, data: { displayName: string; bio?: string }) =>
     request("/api/v1/creator/profile", api.withCsrf(csrfToken, { method: "POST", body: JSON.stringify(data) })),
   getMyCreatorProfile: () => request("/api/v1/creator/me"),
+
+  listCategories: () => request<{ categories: CategoryRecord[] }>("/api/v1/creator/categories"),
+  createCategory: (csrfToken: string, name: string) =>
+    request<CategoryRecord>("/api/v1/creator/categories", api.withCsrf(csrfToken, { method: "POST", body: JSON.stringify({ name }) })),
 
   listMyStories: () => request<{ stories: StoryRecord[] }>("/api/v1/creator/stories"),
   getStory: (id: string) => request<StoryRecord>(`/api/v1/creator/stories/${id}`),

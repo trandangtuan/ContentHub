@@ -17,11 +17,16 @@ const createStorySchema = z.object({
   shortDescription: z.string().max(300).optional(),
   language: z.string().min(2).max(10).default("vi"),
   ageRating: z.string().max(10).optional(),
+  categoryIds: z.array(z.string().uuid()).max(5).optional(),
 });
 
 const updateStorySchema = createStorySchema.partial().extend({
   coverImage: z.string().url().optional(),
   visibility: z.enum(["PUBLIC", "PRIVATE", "UNLISTED"]).optional(),
+});
+
+const createCategorySchema = z.object({
+  name: z.string().min(1).max(50),
 });
 
 const createChapterSchema = z.object({
@@ -50,12 +55,18 @@ async function uniqueSlug(baseTitle: string, check: (slug: string) => Promise<bo
 }
 
 async function requireOwnedStory(userSession: { userId: string; creatorProfileId: string | null; role: string }, storyId: string) {
-  const content = await prisma.content.findUnique({ where: { id: storyId }, include: { story: true } });
+  const content = await prisma.content.findUnique({ where: { id: storyId }, include: { story: true, categories: { include: { category: true } } } });
   if (!content || content.deletedAt) throw new NotFoundError("Story not found");
   const isOwner = userSession.creatorProfileId === content.creatorId;
   const isPrivileged = userSession.role === "ADMIN" || userSession.role === "MODERATOR";
   if (!isOwner && !isPrivileged) throw new ForbiddenError();
   return content;
+}
+
+async function requireExistingCategories(categoryIds: string[]) {
+  if (categoryIds.length === 0) return;
+  const found = await prisma.category.findMany({ where: { id: { in: categoryIds }, deletedAt: null } });
+  if (found.length !== categoryIds.length) throw new ValidationError("One or more categories do not exist");
 }
 
 export function registerCreatorRoutes(app: FastifyInstance) {
@@ -88,6 +99,28 @@ export function registerCreatorRoutes(app: FastifyInstance) {
     return prisma.creatorProfile.findUniqueOrThrow({ where: { id: session.creatorProfileId } });
   });
 
+  // ── Categories ────────────────────────────────────────────────────────
+  // Categories are a shared, global taxonomy (no per-creator ownership —
+  // see packages/database schema): any creator can add one, and it becomes
+  // immediately available for every other creator to pick too.
+  app.get("/creator/categories", async () => {
+    const categories = await prisma.category.findMany({ where: { deletedAt: null }, orderBy: { name: "asc" } });
+    return { categories };
+  });
+
+  app.post("/creator/categories", async (request, reply) => {
+    app.requireRole(request, "CREATOR");
+    app.requireCsrf(request);
+    const body = createCategorySchema.parse(request.body);
+
+    const existing = await prisma.category.findFirst({ where: { name: { equals: body.name, mode: "insensitive" }, deletedAt: null } });
+    if (existing) return existing;
+
+    const slug = await uniqueSlug(body.name, async (candidate) => !(await prisma.category.findUnique({ where: { slug: candidate } })));
+    const category = await prisma.category.create({ data: { name: body.name, slug } });
+    reply.status(201).send(category);
+  });
+
   // ── Stories ───────────────────────────────────────────────────────────
   app.get("/creator/stories", async (request) => {
     const session = app.requireAuth(request);
@@ -96,7 +129,7 @@ export function registerCreatorRoutes(app: FastifyInstance) {
     const stories = await prisma.content.findMany({
       where: { creatorId: session.creatorProfileId, deletedAt: null },
       orderBy: { updatedAt: "desc" },
-      include: { story: true, _count: { select: { parts: true } } },
+      include: { story: true, categories: { include: { category: true } }, _count: { select: { parts: true } } },
     });
 
     return { stories };
@@ -135,6 +168,7 @@ export function registerCreatorRoutes(app: FastifyInstance) {
     if (!session.creatorProfileId) throw new ForbiddenError("Create a creator profile first");
 
     const body = createStorySchema.parse(request.body);
+    await requireExistingCategories(body.categoryIds ?? []);
     const slug = await uniqueSlug(body.title, async (candidate) => !(await prisma.content.findUnique({ where: { slug: candidate } })));
 
     const content = await prisma.content.create({
@@ -149,8 +183,9 @@ export function registerCreatorRoutes(app: FastifyInstance) {
         status: "DRAFT",
         visibility: "PRIVATE",
         story: { create: { subtitle: body.subtitle, ageRating: body.ageRating } },
+        categories: body.categoryIds ? { create: body.categoryIds.map((categoryId) => ({ categoryId })) } : undefined,
       },
-      include: { story: true },
+      include: { story: true, categories: { include: { category: true } } },
     });
 
     reply.status(201).send(content);
@@ -162,6 +197,7 @@ export function registerCreatorRoutes(app: FastifyInstance) {
     const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
     const content = await requireOwnedStory(session, id);
     const body = updateStorySchema.parse(request.body);
+    if (body.categoryIds) await requireExistingCategories(body.categoryIds);
 
     let newSlug: string | undefined;
     if (body.title && body.title !== content.title) {
@@ -171,6 +207,9 @@ export function registerCreatorRoutes(app: FastifyInstance) {
     const updated = await prisma.$transaction(async (tx) => {
       if (newSlug) {
         await tx.redirect.create({ data: buildSlugChangeRedirect(`/truyen/${content.slug}`, `/truyen/${newSlug}`) });
+      }
+      if (body.categoryIds) {
+        await tx.contentCategory.deleteMany({ where: { contentId: id } });
       }
       return tx.content.update({
         where: { id },
@@ -183,8 +222,9 @@ export function registerCreatorRoutes(app: FastifyInstance) {
           coverImage: body.coverImage,
           visibility: body.visibility,
           story: body.subtitle || body.ageRating ? { update: { subtitle: body.subtitle, ageRating: body.ageRating } } : undefined,
+          categories: body.categoryIds ? { create: body.categoryIds.map((categoryId) => ({ categoryId })) } : undefined,
         },
-        include: { story: true },
+        include: { story: true, categories: { include: { category: true } } },
       });
     });
 

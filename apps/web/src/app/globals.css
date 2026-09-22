@@ -926,6 +926,17 @@ tbody tr:hover {
   text-decoration: none;
 }
 
+.chip-toggle {
+  cursor: pointer;
+  font: inherit;
+}
+
+.chip-toggle.active {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: #fff;
+}
+
 .hero {
   padding: 56px 0 40px;
   text-align: center;
