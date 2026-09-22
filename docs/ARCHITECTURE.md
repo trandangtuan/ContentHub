@@ -2,11 +2,12 @@
 
 ## Style: modular monolith
 
-ContentHub runs as two deployables — `apps/api` and `apps/web` — sharing a
-set of internal packages under `packages/*`. It is **not** microservices:
-there is one Postgres database, one Redis instance, and both apps import
-the same `packages/database` Prisma client. What makes it "modular" rather
-than "a pile of code that imports Prisma everywhere":
+ContentHub runs as three deployables — `apps/api`, `apps/web`, and
+`apps/worker` — sharing a set of internal packages under `packages/*`. It
+is **not** microservices: there is one Postgres database, one Redis
+instance, and all three apps import the same `packages/database` Prisma
+client. What makes it "modular" rather than "a pile of code that imports
+Prisma everywhere":
 
 - **Every domain concept lives in exactly one package.** Revenue math is in
   `packages/revenue`, never duplicated in `apps/api`. SEO URL-building is in
@@ -97,6 +98,10 @@ apps/
           a reader's page bundle.
   api/    Fastify REST API. Owns every write path (auth, creator CRUD,
           moderation actions would live here) and the public JSON API.
+  worker/ BullMQ worker process. Consumes the content-view-events queue
+          and calls packages/analytics' aggregateViewEventsBatch — the
+          only place raw view events become ContentView rows. Scales
+          independently of apps/api; see docs/DEPLOYMENT.md.
 
 packages/
   database/    prisma/schema.prisma is the single source of truth for the
@@ -159,18 +164,19 @@ exist and are already tested.
 
 ## Request flow: a reader's view becoming revenue
 
-1. Reader loads a chapter page. A small client script (not built as part of
-   this pass — see below) would call `POST /api/v1/events/view` with
-   `{ contentId, contentPartId, sessionId, duration, scrollDepth }`.
+1. Reader loads a chapter page. `ChapterViewTracker` (`apps/web`, a tiny
+   client component that renders nothing) times the visit and calls
+   `POST /api/v1/events/view` via `navigator.sendBeacon` when the reader
+   navigates away or hides the tab — not on mount, so `duration`/
+   `scrollDepth` reflect actual reading rather than "the page loaded".
 2. `apps/api` validates the payload (`packages/analytics`' zod schema — the
    client can describe engagement, never claim a qualification stage),
    hashes the session id and IP, and enqueues a `content-view-events`
    BullMQ job. The HTTP response is `202 Accepted` immediately; nothing is
    written to Postgres synchronously per request (spec §36, §82 rule 8).
-3. A worker (not wired into `docker-compose.yml` yet — see
-   "Implementation status") drains the queue and calls
-   `aggregateViewEventsBatch` (`packages/analytics`), which runs each event
-   through `qualifyView` (`packages/revenue`) and upserts daily
+3. `apps/worker` (its own `docker-compose.yml` service) drains the queue
+   and calls `aggregateViewEventsBatch` (`packages/analytics`), which runs
+   each event through `qualifyView` (`packages/revenue`) and upserts daily
    `ContentView` counters.
 4. At period close, an admin/cron job (not built) reads `ContentView`
    totals, calls `splitRevenuePool` + `allocateCreatorPool`
@@ -232,10 +238,8 @@ built in this pass, and why:
 
 | Not built | Why it's safe to defer | What exists instead |
 |---|---|---|
-| A running BullMQ worker process | The queue, the job payload, and the aggregation function are all real and tested (`packages/analytics`); only the "run this in a loop" process wrapper and its `docker-compose.yml` service are missing. | `aggregateViewEventsBatch` is a plain exported function — wiring a `Worker` around it is a few lines. |
 | Revenue period lifecycle automation (OPEN→CALCULATING→FRAUD_REVIEW→FINALIZED→PAYOUT_AVAILABLE) | The `RevenuePool.status` enum and the calculation functions exist; the state machine that walks a period through these stages on a schedule doesn't. | `splitRevenuePool`/`allocateCreatorPool`/`WalletLedger` (`packages/revenue`). |
 | Fraud/bot detection beyond view-qualification thresholds | Out of scope for an MVP; the qualification pipeline has the seam (`RawViewEvent.isSuspectedBot`) for a real detector to plug into. | `qualifyView` treats every non-bot-flagged session as valid/qualified per duration+scroll thresholds. |
 | A real `PaymentProvider` (bank transfer/Stripe/etc.) | The interface is the point — swapping providers shouldn't touch calling code. | `ManualPaymentProvider` (records payouts as pending for back-office processing). |
 | OpenSearch `SearchProvider` | `PostgresSearchProvider` is the MVP implementation the spec calls for; the interface (`packages/search`) is what a second implementation would satisfy. | `PostgresSearchProvider`. |
-| Client-side view-event beacon in the reader page | The ingestion endpoint (`POST /api/v1/events/view`) is built and tested; the `apps/web` reader page doesn't yet call it. | — |
-| 410 Gone distinction in `apps/web` pages | `apps/api`'s public routes correctly return 410 for soft-deleted content vs. 404 for never-existed (tested). Server Components can only call `notFound()` (always 404) without middleware; that middleware wasn't built this pass. | API-level 404/410 tests. |
+| 410 Gone distinction in `apps/web` pages | `apps/api`'s public routes correctly return 410 for soft-deleted content vs. 404 for never-existed (tested). Server Components can only call `notFound()` (always 404) without middleware; that middleware wasn't built this pass — a content lookup on every request would also cost TTFB at scale, so it's deferred until real traffic justifies it. | API-level 404/410 tests. |

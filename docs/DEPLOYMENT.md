@@ -90,12 +90,12 @@ Points specific to this codebase:
   `Cache-Control` accordingly (or respect what `apps/web`/`apps/api`
   already send — sitemap/llms.txt routes set
   `Cache-Control: public, max-age=3600`).
-- **The BullMQ worker** (view-event aggregation) is not wired into
-  `docker-compose.yml` as its own service in this pass — see
-  docs/ARCHITECTURE.md's implementation-status table. In production it
-  should run as its own process (`node` process calling
-  `aggregateViewEventsBatch` in a loop, or a proper BullMQ `Worker`),
-  scaled independently of the API's request-handling capacity.
+- **The BullMQ worker** (view-event aggregation) runs as its own service —
+  `apps/worker`, wired into `docker-compose.yml` alongside `api`/`web`/
+  `postgres`/`redis`. It consumes the `content-view-events` queue and calls
+  `aggregateViewEventsBatch`, scaled independently of the API's
+  request-handling capacity (bump its replica count or `concurrency`
+  before scaling `api`).
 
 ## Environment variables
 
@@ -111,11 +111,11 @@ source (spec §48).
 
 Everything in "Why not microservices from day one"
 (docs/ARCHITECTURE.md) applies here too: start with `docker compose` (or
-the equivalent on a single VPS/EC2 instance) running all four services,
+the equivalent on a single VPS/EC2 instance) running all five services,
 Postgres included. The natural first scaling steps, roughly in order of
 when you'd need them: move Postgres to a managed instance (RDS/Cloud SQL)
 before touching application code; add a read replica once analytics/search
-queries compete with write traffic; extract the BullMQ worker to its own
-autoscaled process once event volume matters; only then consider splitting
-`apps/api` itself, using the `packages/*` boundaries described in
-docs/ARCHITECTURE.md as the seams.
+queries compete with write traffic; scale the `apps/worker` service
+horizontally (more replicas, or raise its `concurrency`) once view-event
+volume matters; only then consider splitting `apps/api` itself, using the
+`packages/*` boundaries described in docs/ARCHITECTURE.md as the seams.
