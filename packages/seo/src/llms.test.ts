@@ -18,6 +18,10 @@ describe("buildLlmsTxt", () => {
     expect(txt.toLowerCase()).not.toContain("database");
     expect(txt.toLowerCase()).not.toContain("prisma");
   });
+
+  it("never references a URL that doesn't correspond to a real route (no dead links for crawlers/LLMs to follow)", () => {
+    expect(txt).not.toContain("/lien-he");
+  });
 });
 
 describe("buildLlmsFullTxt", () => {

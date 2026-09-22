@@ -2,6 +2,11 @@ import { prisma } from "@contenthub/database";
 
 const publicStoryWhere = { type: "STORY" as const, status: "PUBLISHED" as const, visibility: "PUBLIC" as const, deletedAt: null };
 
+// `_count` must filter to publicly-visible content — an unfiltered count would
+// mark a tag/category "indexable" off the strength of draft-only stories,
+// producing a thin/empty page that still gets indexed (spec: no thin taxonomy pages).
+const publicContentCountFilter = { where: { content: publicStoryWhere } };
+
 export async function getStoryBySlug(slug: string) {
   return prisma.content.findFirst({
     where: { slug, type: "STORY" },
@@ -14,11 +19,21 @@ export async function getStoryBySlug(slug: string) {
   });
 }
 
-export async function getPublishedChapters(contentId: string) {
-  return prisma.contentPart.findMany({
-    where: { contentId, status: "PUBLISHED", deletedAt: null },
-    orderBy: { position: "asc" },
-  });
+export const CHAPTER_LIST_PAGE_SIZE = 100;
+
+/**
+ * Paginated so a story with thousands of chapters never renders them all
+ * into one HTML page (bad for TTFB/LCP and for crawl budget). Each chapter
+ * still gets its own indexable URL and its own sitemap entry regardless of
+ * which page of this list it falls on.
+ */
+export async function getPublishedChapters(contentId: string, { limit = CHAPTER_LIST_PAGE_SIZE, offset = 0 }: { limit?: number; offset?: number } = {}) {
+  const where = { contentId, status: "PUBLISHED" as const, deletedAt: null };
+  const [items, total] = await Promise.all([
+    prisma.contentPart.findMany({ where, orderBy: { position: "asc" }, take: limit, skip: offset }),
+    prisma.contentPart.count({ where }),
+  ]);
+  return { items, total };
 }
 
 export async function getChapter(contentId: string, chapterSlug: string) {
@@ -62,7 +77,10 @@ export async function getAuthorStories(creatorId: string) {
 }
 
 export async function getCategoryBySlug(slug: string) {
-  return prisma.category.findFirst({ where: { slug, deletedAt: null } });
+  return prisma.category.findFirst({
+    where: { slug, deletedAt: null },
+    include: { _count: { select: { contents: publicContentCountFilter } } },
+  });
 }
 
 export async function getCategoryStories(categoryId: string, { limit = 24, offset = 0 } = {}) {
@@ -74,8 +92,33 @@ export async function getCategoryStories(categoryId: string, { limit = 24, offse
   return { items, total };
 }
 
+/**
+ * "Truyện liên quan" (spec: internal linking via real HTML <a>, no keyword
+ * stuffing). Prefers stories sharing a category; falls back to the same
+ * author when the story has no category yet. Always excludes itself.
+ */
+export async function getRelatedStories(content: { id: string; creatorId: string; categoryIds: string[] }, limit = 6) {
+  if (content.categoryIds.length > 0) {
+    const byCategory = await prisma.content.findMany({
+      where: { ...publicStoryWhere, id: { not: content.id }, categories: { some: { categoryId: { in: content.categoryIds } } } },
+      orderBy: { publishedAt: "desc" },
+      take: limit,
+    });
+    if (byCategory.length > 0) return byCategory;
+  }
+
+  return prisma.content.findMany({
+    where: { ...publicStoryWhere, id: { not: content.id }, creatorId: content.creatorId },
+    orderBy: { publishedAt: "desc" },
+    take: limit,
+  });
+}
+
 export async function getTagBySlug(slug: string) {
-  return prisma.tag.findFirst({ where: { slug, deletedAt: null }, include: { _count: { select: { contents: true } } } });
+  return prisma.tag.findFirst({
+    where: { slug, deletedAt: null },
+    include: { _count: { select: { contents: publicContentCountFilter } } },
+  });
 }
 
 export async function getTagStories(tagId: string) {

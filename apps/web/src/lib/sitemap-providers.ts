@@ -90,27 +90,40 @@ export class AuthorSitemapProvider implements SitemapProvider {
   }
 }
 
+const publicContentFilter = { status: "PUBLISHED" as const, visibility: "PUBLIC" as const, deletedAt: null };
+// `_count` must filter to that same public-content shape — an unfiltered
+// count would list a category/tag in the sitemap on the strength of
+// draft-only content, sending crawlers to a page the page itself noindexes
+// (see the matching MIN_STORIES_TO_INDEX check in the category/tag pages).
+const publicContentCountFilter = { where: { content: publicContentFilter } };
+const MIN_STORIES_TO_INDEX = 2;
+
 export class CategorySitemapProvider implements SitemapProvider {
   key = "categories";
 
+  /** Only categories with >=2 public stories get an SEO landing page — matters more now that creators can create categories themselves, not just admins. */
   async getUrls(): Promise<SitemapPage> {
     const { siteUrl } = getSeoConfig();
-    const rows = await prisma.category.findMany({ where: { deletedAt: null }, select: { slug: true, updatedAt: true } });
-    return { entries: rows.map((r) => ({ loc: `${siteUrl}/the-loai/${r.slug}`, lastmod: r.updatedAt.toISOString() })), nextCursor: null };
+    const rows = await prisma.category.findMany({
+      where: { deletedAt: null },
+      select: { slug: true, updatedAt: true, _count: { select: { contents: publicContentCountFilter } } },
+    });
+    const indexable = rows.filter((r) => r._count.contents >= MIN_STORIES_TO_INDEX);
+    return { entries: indexable.map((r) => ({ loc: `${siteUrl}/the-loai/${r.slug}`, lastmod: r.updatedAt.toISOString() })), nextCursor: null };
   }
 }
 
 export class TagSitemapProvider implements SitemapProvider {
   key = "tags";
 
-  /** Only tags with >=2 published stories get an SEO landing page (docs/SEO.md #45) — thin tags aren't worth indexing. */
+  /** Only tags with >=2 public stories get an SEO landing page (docs/SEO.md #45) — thin tags aren't worth indexing. */
   async getUrls(): Promise<SitemapPage> {
     const { siteUrl } = getSeoConfig();
     const rows = await prisma.tag.findMany({
-      where: { deletedAt: null, contents: { some: {} } },
-      select: { slug: true, updatedAt: true, _count: { select: { contents: true } } },
+      where: { deletedAt: null },
+      select: { slug: true, updatedAt: true, _count: { select: { contents: publicContentCountFilter } } },
     });
-    const indexable = rows.filter((r) => r._count.contents >= 2);
+    const indexable = rows.filter((r) => r._count.contents >= MIN_STORIES_TO_INDEX);
     return { entries: indexable.map((r) => ({ loc: `${siteUrl}/tag/${r.slug}`, lastmod: r.updatedAt.toISOString() })), nextCursor: null };
   }
 }

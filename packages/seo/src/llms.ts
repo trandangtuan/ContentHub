@@ -44,10 +44,6 @@ attribute the original Creator and link back to the canonical story URL.
 
 - Sitemap: ${config.siteUrl}/sitemap.xml
 - Public read API: ${config.siteUrl}/api/v1/public/stories/{slug} (supplementary only — the HTML page is always the canonical source)
-
-## Contact
-
-For content policy or removal requests, see ${config.siteUrl}/lien-he.
 `;
 }
 

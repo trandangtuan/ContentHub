@@ -16,17 +16,26 @@ interface Params {
 
 const PAGE_SIZE = 24;
 
+// A category needs at least this many public stories to be worth an
+// indexable SEO landing page — otherwise it's noindexed rather than
+// deleted, matching the tag page's thin-taxonomy handling. This matters
+// more now that creators can create categories themselves (not just admins),
+// so a near-empty one is a realistic case, not just a hypothetical.
+const MIN_STORIES_TO_INDEX = 2;
+
 export async function generateMetadata({ params }: { params: Promise<Params> }): Promise<Metadata> {
   const { categorySlug } = await params;
   const config = getSeoConfig();
   const category = await getCategoryBySlug(categorySlug);
   if (!category) return { robots: { index: false, follow: false } };
 
+  const isIndexable = category._count.contents >= MIN_STORIES_TO_INDEX;
+
   return buildPageMetadata(config, {
     title: titleTemplates.category(category.name, config.siteName),
     description: category.description ?? `Danh sách truyện thể loại ${category.name} trên ${config.siteName}.`,
     path: paths.category(category.slug),
-    robots: getRobotsMetadata({ kind: "static-indexable" }),
+    robots: getRobotsMetadata(isIndexable ? { kind: "static-indexable" } : { kind: "thin-taxonomy" }),
     ogType: "website",
   }) as Metadata;
 }
