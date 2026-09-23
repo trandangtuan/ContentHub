@@ -7,6 +7,7 @@ import { useSession } from "@/lib/use-session";
 import { api, type PartRecord } from "@/lib/api-client";
 import { Editor, type EditorStats } from "@/components/Editor";
 import { ImageUploadField } from "@/components/ImageUploadField";
+import { CategoryPicker } from "@/components/CategoryPicker";
 import { sanitizeContentHtml } from "@/lib/sanitize";
 import { StatusBadge } from "@/components/StatusBadge";
 
@@ -20,6 +21,7 @@ interface Props {
   initialTitle?: string;
   initialDescription?: string; // single mode only (the item's own description)
   initialCoverImage?: string | null; // single mode only
+  initialCategoryIds?: string[]; // single mode only — a "multi" type's item categories live on ContentMetadataForm instead
   initialHtml?: string;
   initialStatus?: string;
 }
@@ -32,7 +34,17 @@ interface Props {
  * parent — used by dashboard/[section]/[id]/chapters/new and [chapterId]). A
  * new type reuses this unchanged in whichever shape it declares.
  */
-export function ContentPartEditorForm({ config, parentItemId, partId: initialPartId, initialTitle, initialDescription, initialCoverImage, initialHtml, initialStatus }: Props) {
+export function ContentPartEditorForm({
+  config,
+  parentItemId,
+  partId: initialPartId,
+  initialTitle,
+  initialDescription,
+  initialCoverImage,
+  initialCategoryIds,
+  initialHtml,
+  initialStatus,
+}: Props) {
   const router = useRouter();
   const { session } = useSession();
   const isSingle = config.partsMode === "single";
@@ -42,6 +54,7 @@ export function ContentPartEditorForm({ config, parentItemId, partId: initialPar
   const [title, setTitle] = useState(initialTitle ?? "");
   const [description, setDescription] = useState(initialDescription ?? "");
   const [coverImage, setCoverImage] = useState<string | null>(initialCoverImage ?? null);
+  const [categoryIds, setCategoryIds] = useState<string[]>(initialCategoryIds ?? []);
   const [stats, setStats] = useState<EditorStats>({ html: initialHtml ?? "", wordCount: 0, readingTimeMinutes: 0 });
   const [status, setStatus] = useState(initialStatus ?? "DRAFT");
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
@@ -49,8 +62,8 @@ export function ContentPartEditorForm({ config, parentItemId, partId: initialPar
   const [scheduledAt, setScheduledAt] = useState("");
   const [siblings, setSiblings] = useState<PartRecord[] | null>(null);
 
-  const latest = useRef({ title, description, coverImage, stats, partId });
-  latest.current = { title, description, coverImage, stats, partId };
+  const latest = useRef({ title, description, coverImage, categoryIds, stats, partId });
+  latest.current = { title, description, coverImage, categoryIds, stats, partId };
 
   // Powers prev/next/add-chapter navigation below — only meaningful for a "multi" type.
   useEffect(() => {
@@ -64,18 +77,18 @@ export function ContentPartEditorForm({ config, parentItemId, partId: initialPar
 
   const save = useCallback(async () => {
     if (!session?.csrfToken) return;
-    const { title: t, description: d, coverImage: c, stats: s, partId: id } = latest.current;
+    const { title: t, description: d, coverImage: c, categoryIds: cats, stats: s, partId: id } = latest.current;
     if (!t.trim()) return;
 
     setSaveState("saving");
     try {
       if (isSingle) {
         if (!id) {
-          const created = await contentApi.create(session.csrfToken, { title: t, description: d, coverImage: c ?? undefined, bodyHtml: s.html });
+          const created = await contentApi.create(session.csrfToken, { title: t, description: d, coverImage: c ?? undefined, categoryIds: cats, bodyHtml: s.html });
           setPartId(created.id);
           router.replace(`/dashboard/${config.urlPrefix}/${created.id}`);
         } else {
-          await contentApi.update(session.csrfToken, id, { title: t, description: d, coverImage: c ?? undefined, bodyHtml: s.html });
+          await contentApi.update(session.csrfToken, id, { title: t, description: d, coverImage: c ?? undefined, categoryIds: cats, bodyHtml: s.html });
         }
       } else {
         if (!id) {
@@ -98,7 +111,7 @@ export function ContentPartEditorForm({ config, parentItemId, partId: initialPar
     const timer = setTimeout(save, AUTOSAVE_DEBOUNCE_MS);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [title, description, stats.html, coverImage]);
+  }, [title, description, stats.html, coverImage, categoryIds]);
 
   async function publishNow() {
     if (!partId || !session?.csrfToken) return;
@@ -158,6 +171,8 @@ export function ContentPartEditorForm({ config, parentItemId, partId: initialPar
           <label htmlFor="partDescription">Mô tả ngắn</label>
           <textarea id="partDescription" value={description} onChange={(e) => setDescription(e.target.value)} rows={3} maxLength={2000} />
           <ImageUploadField label="Ảnh bìa" purpose="cover" value={coverImage} onChange={setCoverImage} contextSlug={title || config.urlPrefix} />
+          <label>Thể loại</label>
+          <CategoryPicker selectedIds={categoryIds} onChange={setCategoryIds} />
         </>
       )}
 

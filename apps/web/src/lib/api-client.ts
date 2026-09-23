@@ -220,6 +220,10 @@ export const api = {
   listCategories: () => request<{ categories: CategoryRecord[] }>("/api/v1/creator/categories"),
   createCategory: (csrfToken: string, name: string) =>
     request<CategoryRecord>("/api/v1/creator/categories", api.withCsrf(csrfToken, { method: "POST", body: JSON.stringify({ name }) })),
+  updateCategory: (csrfToken: string, id: string, name: string) =>
+    request<CategoryRecord>(`/api/v1/creator/categories/${id}`, api.withCsrf(csrfToken, { method: "PATCH", body: JSON.stringify({ name }) })),
+  deleteCategory: (csrfToken: string, id: string) =>
+    request<void>(`/api/v1/creator/categories/${id}`, api.withCsrf(csrfToken, { method: "DELETE" })),
 
   /**
    * One factory bound to a ContentType's registry config (packages/seo) —

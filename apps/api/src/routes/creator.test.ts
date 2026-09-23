@@ -399,6 +399,98 @@ describe("Categories", () => {
     });
     expect(update.statusCode).toBe(422);
   });
+
+  it("assigns a category to an article too — categories aren't scoped to one ContentType", async () => {
+    const { cookies, csrfToken } = await registerAndBecomeCreator("Article Category Author");
+
+    const createCategory = await app.inject({
+      method: "POST",
+      url: "/api/v1/creator/categories",
+      cookies,
+      headers: { "x-csrf-token": csrfToken },
+      payload: { name: `Tin Odoo ${runSuffix}` },
+    });
+    const category = createCategory.json();
+
+    const createArticle = await app.inject({
+      method: "POST",
+      url: "/api/v1/creator/articles",
+      cookies,
+      headers: { "x-csrf-token": csrfToken },
+      payload: { title: `Category Article ${runSuffix}`, bodyHtml: "<p>x</p>", categoryIds: [category.id] },
+    });
+    expect(createArticle.statusCode).toBe(201);
+    const article = createArticle.json();
+    expect(article.categories).toHaveLength(1);
+    expect(article.categories[0].category.id).toBe(category.id);
+  });
+
+  it("lets a creator rename a category (regenerating its slug)", async () => {
+    const { cookies, csrfToken } = await registerAndBecomeCreator("Rename Category Author");
+
+    const create = await app.inject({
+      method: "POST",
+      url: "/api/v1/creator/categories",
+      cookies,
+      headers: { "x-csrf-token": csrfToken },
+      payload: { name: `Tin Thời Sự ${runSuffix}` },
+    });
+    const category = create.json();
+
+    const rename = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/creator/categories/${category.id}`,
+      cookies,
+      headers: { "x-csrf-token": csrfToken },
+      payload: { name: `Tin Giá Vàng ${runSuffix}` },
+    });
+    expect(rename.statusCode).toBe(200);
+    const renamed = rename.json();
+    expect(renamed.name).toBe(`Tin Giá Vàng ${runSuffix}`);
+    expect(renamed.slug).not.toBe(category.slug);
+  });
+
+  it("deletes a category (soft delete): drops out of the list, existing content keeps its assignment", async () => {
+    const { cookies, csrfToken } = await registerAndBecomeCreator("Delete Category Author");
+
+    const create = await app.inject({
+      method: "POST",
+      url: "/api/v1/creator/categories",
+      cookies,
+      headers: { "x-csrf-token": csrfToken },
+      payload: { name: `Tin Tạm Thời ${runSuffix}` },
+    });
+    const category = create.json();
+
+    const createArticle = await app.inject({
+      method: "POST",
+      url: "/api/v1/creator/articles",
+      cookies,
+      headers: { "x-csrf-token": csrfToken },
+      payload: { title: `Category Delete Article ${runSuffix}`, bodyHtml: "<p>x</p>", categoryIds: [category.id] },
+    });
+    const article = createArticle.json();
+
+    const deleteRes = await app.inject({ method: "DELETE", url: `/api/v1/creator/categories/${category.id}`, cookies, headers: { "x-csrf-token": csrfToken } });
+    expect(deleteRes.statusCode).toBe(204);
+
+    const list = await app.inject({ method: "GET", url: "/api/v1/creator/categories", cookies });
+    expect(list.json().categories.map((c: { id: string }) => c.id)).not.toContain(category.id);
+
+    const getArticle = await app.inject({ method: "GET", url: `/api/v1/creator/articles/${article.id}`, cookies });
+    expect(getArticle.json().categories[0].category.id).toBe(category.id);
+  });
+
+  it("404s renaming/deleting a category that doesn't exist", async () => {
+    const { cookies, csrfToken } = await registerAndBecomeCreator("Missing Category Author");
+    const fakeId = "00000000-0000-0000-0000-000000000000";
+
+    const rename = await app.inject({ method: "PATCH", url: `/api/v1/creator/categories/${fakeId}`, cookies, headers: { "x-csrf-token": csrfToken }, payload: { name: "x" } });
+    expect(rename.statusCode).toBe(404);
+
+    const del = await app.inject({ method: "DELETE", url: `/api/v1/creator/categories/${fakeId}`, cookies, headers: { "x-csrf-token": csrfToken } });
+    expect(del.statusCode).toBe(404);
+  });
 });
 
 describe("GET /api/v1/creator/wallet", () => {

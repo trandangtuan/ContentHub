@@ -64,6 +64,7 @@ export default function EditContentItemPage() {
           initialTitle={item.title}
           initialDescription={item.description ?? ""}
           initialCoverImage={item.coverImage}
+          initialCategoryIds={item.categories?.map((c) => c.category.id) ?? []}
           initialHtml={item.parts?.[0]?.bodyHtml ?? ""}
           initialStatus={item.status}
         />

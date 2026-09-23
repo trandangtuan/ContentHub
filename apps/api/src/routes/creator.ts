@@ -18,6 +18,10 @@ const createCategorySchema = z.object({
   name: z.string().min(1).max(50),
 });
 
+const updateCategorySchema = z.object({
+  name: z.string().min(1).max(50),
+});
+
 async function uniqueSlug(baseTitle: string, check: (slug: string) => Promise<boolean>): Promise<string> {
   const base = slugify(baseTitle);
   for (let attempt = 0; attempt < 20; attempt++) {
@@ -74,8 +78,11 @@ export function registerCreatorRoutes(app: FastifyInstance) {
 
   // ── Categories ────────────────────────────────────────────────────────
   // Categories are a shared, global taxonomy (no per-creator ownership —
-  // see packages/database schema): any creator can add one, and it becomes
-  // immediately available for every other creator to pick too.
+  // see packages/database schema): any creator can add, rename, or
+  // (soft-)delete one, and the result is immediately visible to every
+  // other creator too — same permissive model already established for
+  // create, extended to update/delete rather than adding an ownership
+  // model this taxonomy has never had.
   app.get("/creator/categories", async () => {
     const categories = await prisma.category.findMany({ where: { deletedAt: null }, orderBy: { name: "asc" } });
     return { categories };
@@ -92,6 +99,36 @@ export function registerCreatorRoutes(app: FastifyInstance) {
     const slug = await uniqueSlug(body.name, async (candidate) => !(await prisma.category.findUnique({ where: { slug: candidate } })));
     const category = await prisma.category.create({ data: { name: body.name, slug } });
     reply.status(201).send(category);
+  });
+
+  app.patch("/creator/categories/:id", async (request) => {
+    app.requireRole(request, "CREATOR");
+    app.requireCsrf(request);
+    const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
+    const body = updateCategorySchema.parse(request.body);
+
+    const existing = await prisma.category.findUnique({ where: { id } });
+    if (!existing || existing.deletedAt) throw new NotFoundError("Category not found");
+
+    const slug =
+      body.name === existing.name ? existing.slug : await uniqueSlug(body.name, async (candidate) => !(await prisma.category.findUnique({ where: { slug: candidate } })));
+
+    return prisma.category.update({ where: { id }, data: { name: body.name, slug } });
+  });
+
+  app.delete("/creator/categories/:id", async (request, reply) => {
+    app.requireRole(request, "CREATOR");
+    app.requireCsrf(request);
+    const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
+
+    const existing = await prisma.category.findUnique({ where: { id } });
+    if (!existing || existing.deletedAt) throw new NotFoundError("Category not found");
+
+    // Soft delete: existing content keeps its content_categories rows (no
+    // data loss), the category just stops appearing in the picker/taxonomy
+    // pages — same convention as every other content-adjacent table.
+    await prisma.category.update({ where: { id }, data: { deletedAt: new Date() } });
+    reply.status(204).send();
   });
 
   // ── Analytics / wallet (read-only; all figures computed server-side) ───
