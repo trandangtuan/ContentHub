@@ -10,6 +10,11 @@ const createProfileSchema = z.object({
   bio: z.string().max(2000).optional(),
 });
 
+const updateProfileSchema = z.object({
+  bio: z.string().max(2000).optional(),
+  avatarUrl: z.string().url().optional(),
+});
+
 const createStorySchema = z.object({
   title: z.string().min(1).max(200),
   subtitle: z.string().max(200).optional(),
@@ -18,10 +23,10 @@ const createStorySchema = z.object({
   language: z.string().min(2).max(10).default("vi"),
   ageRating: z.string().max(10).optional(),
   categoryIds: z.array(z.string().uuid()).max(5).optional(),
+  coverImage: z.string().url().optional(),
 });
 
 const updateStorySchema = createStorySchema.partial().extend({
-  coverImage: z.string().url().optional(),
   visibility: z.enum(["PUBLIC", "PRIVATE", "UNLISTED"]).optional(),
 });
 
@@ -97,6 +102,15 @@ export function registerCreatorRoutes(app: FastifyInstance) {
     const session = app.requireAuth(request);
     if (!session.creatorProfileId) throw new NotFoundError("No creator profile yet");
     return prisma.creatorProfile.findUniqueOrThrow({ where: { id: session.creatorProfileId } });
+  });
+
+  app.patch("/creator/profile", async (request) => {
+    const session = app.requireAuth(request);
+    app.requireCsrf(request);
+    if (!session.creatorProfileId) throw new NotFoundError("No creator profile yet");
+    const body = updateProfileSchema.parse(request.body);
+
+    return prisma.creatorProfile.update({ where: { id: session.creatorProfileId }, data: body });
   });
 
   // ── Categories ────────────────────────────────────────────────────────
@@ -179,6 +193,7 @@ export function registerCreatorRoutes(app: FastifyInstance) {
         slug,
         description: body.description,
         shortDescription: body.shortDescription,
+        coverImage: body.coverImage,
         language: body.language,
         status: "DRAFT",
         visibility: "PRIVATE",

@@ -41,6 +41,7 @@ services:
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/contenthub_dev
       REDIS_URL: redis://redis:6379
       SITE_URL: ${SITE_URL:-http://localhost:3000}
+      API_URL: ${API_URL:-http://localhost:4000}
       API_PORT: 4000
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
       SESSION_SECRET: ${SESSION_SECRET:?SESSION_SECRET must be set — see .env.example}
@@ -49,6 +50,9 @@ services:
       SESSION_TTL_DAYS: ${SESSION_TTL_DAYS:-30}
       RATE_LIMIT_MAX: ${RATE_LIMIT_MAX:-100}
       RATE_LIMIT_WINDOW_MS: ${RATE_LIMIT_WINDOW_MS:-60000}
+      UPLOADS_DIR: /repo/uploads
+    volumes:
+      - uploads_data:/repo/uploads
     ports:
       - "4000:4000"
 
@@ -93,3 +97,4 @@ services:
 
 volumes:
   postgres_data:
+  uploads_data:

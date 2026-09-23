@@ -7,6 +7,7 @@ import { useSession } from "@/lib/use-session";
 import { api, ApiError, type StoryRecord } from "@/lib/api-client";
 import { StatusBadge } from "@/components/StatusBadge";
 import { CategoryPicker } from "@/components/CategoryPicker";
+import { ImageUploadField } from "@/components/ImageUploadField";
 
 export default function EditStoryPage() {
   const { id } = useParams<{ id: string }>();
@@ -15,6 +16,7 @@ export default function EditStoryPage() {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [categoryIds, setCategoryIds] = useState<string[]>([]);
+  const [coverImage, setCoverImage] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -24,6 +26,7 @@ export default function EditStoryPage() {
       setTitle(s.title);
       setDescription(s.description ?? "");
       setCategoryIds(s.categories?.map((c) => c.category.id) ?? []);
+      setCoverImage(s.coverImage ?? null);
     });
   }, [id]);
 
@@ -32,7 +35,7 @@ export default function EditStoryPage() {
     if (!session?.csrfToken) return;
     setError(null);
     try {
-      const updated = await api.updateStory(session.csrfToken, id, { title, description, categoryIds });
+      const updated = await api.updateStory(session.csrfToken, id, { title, description, categoryIds, coverImage: coverImage ?? undefined });
       setStory(updated);
       setStatus("Đã lưu.");
     } catch (err) {
@@ -87,6 +90,7 @@ export default function EditStoryPage() {
           <textarea id="description" value={description} onChange={(e) => setDescription(e.target.value)} rows={5} maxLength={5000} />
           <label>Thể loại</label>
           <CategoryPicker selectedIds={categoryIds} onChange={setCategoryIds} />
+          <ImageUploadField label="Ảnh bìa" purpose="cover" value={coverImage} onChange={setCoverImage} contextSlug={story.slug} />
           {error ? <p role="alert">{error}</p> : null}
           {status ? <p className="text-sm text-muted">{status}</p> : null}
           <div className="row">

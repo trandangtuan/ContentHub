@@ -1,8 +1,11 @@
 import "./bigint-json.js";
+import { resolve } from "node:path";
 import Fastify, { type FastifyInstance } from "fastify";
 import cors from "@fastify/cors";
 import cookie from "@fastify/cookie";
 import rateLimit from "@fastify/rate-limit";
+import multipart from "@fastify/multipart";
+import staticFiles from "@fastify/static";
 import { ZodError } from "zod";
 import type { ApiConfig } from "./config.js";
 import { AppError } from "./errors.js";
@@ -12,6 +15,12 @@ import { registerCreatorRoutes } from "./routes/creator.js";
 import { registerPublicRoutes } from "./routes/public.js";
 import { registerEventRoutes } from "./routes/events.js";
 import { registerAdminRoutes } from "./routes/admin.js";
+import { registerUploadRoutes } from "./routes/uploads.js";
+
+// Largest of packages/storage's per-purpose limits (chapter-image, 8MB) plus
+// headroom — the real per-purpose ceiling is enforced by validateFileSize in
+// the upload route; this is just the hard cap @fastify/multipart won't exceed.
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 
 export function buildApp(config: ApiConfig): FastifyInstance {
   // Disabled in tests to keep output quiet; otherwise unhandled errors in
@@ -23,7 +32,15 @@ export function buildApp(config: ApiConfig): FastifyInstance {
   app.register(cors, { origin: config.corsOrigins, credentials: true });
   app.register(cookie);
   app.register(rateLimit, { max: config.rateLimitMax, timeWindow: config.rateLimitWindowMs });
+  app.register(multipart, { limits: { fileSize: MAX_UPLOAD_BYTES } });
   app.register(authPlugin, { config });
+
+  // Serves whatever LocalStorageProvider wrote (routes/uploads.ts) back over
+  // HTTP. Under /api/ (not /api/v1/, since these are raw files, not
+  // versioned JSON) so the same nginx "everything under /api/ -> this
+  // container" rule already documented in deploy/nginx/contenthub.conf
+  // covers it with no proxy config change.
+  app.register(staticFiles, { root: resolve(config.uploadsDir), prefix: "/api/uploads/", decorateReply: false });
 
   app.setErrorHandler((error, _request, reply) => {
     if (error instanceof AppError) {
@@ -61,6 +78,7 @@ export function buildApp(config: ApiConfig): FastifyInstance {
       registerPublicRoutes(v1);
       registerEventRoutes(v1, config);
       registerAdminRoutes(v1);
+      registerUploadRoutes(v1, config);
     },
     { prefix: "/api/v1" },
   );

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "@/lib/use-session";
-import { api, ApiError } from "@/lib/api-client";
+import { api } from "@/lib/api-client";
 import { Editor, type EditorStats } from "@/components/Editor";
 import { sanitizeContentHtml } from "@/lib/sanitize";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -82,6 +82,12 @@ export function ChapterEditorForm({ storyId, chapterId: initialChapterId, initia
     setStatus("SCHEDULED");
   }
 
+  async function uploadChapterImage(file: File): Promise<string> {
+    if (!session?.csrfToken) throw new Error("Bạn cần đăng nhập lại");
+    const result = await api.uploadFile(session.csrfToken, "chapter-image", file, title || "chuong");
+    return result.url;
+  }
+
   return (
     <div className="stack">
       <label htmlFor="chapterTitle">Tiêu đề chương</label>
@@ -111,7 +117,7 @@ export function ChapterEditorForm({ storyId, chapterId: initialChapterId, initia
       {preview ? (
         <article className="chapter-content" dangerouslySetInnerHTML={{ __html: sanitizeContentHtml(stats.html) }} />
       ) : (
-        <Editor initialHtml={initialHtml} onChange={setStats} />
+        <Editor initialHtml={initialHtml} onChange={setStats} onUploadImage={uploadChapterImage} />
       )}
     </div>
   );
