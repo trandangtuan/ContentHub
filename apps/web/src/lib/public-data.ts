@@ -1,33 +1,42 @@
-import { prisma } from "@contenthub/database";
+import { prisma, type ContentType } from "@contenthub/database";
+import { SINGLE_PART_SLUG, type ContentTypeConfig } from "@contenthub/seo";
 
-const publicStoryWhere = { type: "STORY" as const, status: "PUBLISHED" as const, visibility: "PUBLIC" as const, deletedAt: null };
+/**
+ * Generic across every ContentType (packages/seo's registry) — a page for a
+ * new type reuses these unchanged, parameterized by `type`/`config` instead
+ * of a new set of story-shaped or article-shaped functions.
+ */
+function publicWhere(type: ContentType) {
+  return { type, status: "PUBLISHED" as const, visibility: "PUBLIC" as const, deletedAt: null };
+}
 
 // `_count` must filter to publicly-visible content — an unfiltered count would
-// mark a tag/category "indexable" off the strength of draft-only stories,
+// mark a tag/category "indexable" off the strength of draft-only content,
 // producing a thin/empty page that still gets indexed (spec: no thin taxonomy pages).
-const publicContentCountFilter = { where: { content: publicStoryWhere } };
+// Categories/tags aren't type-specific, so this stays type-agnostic across every ContentType.
+const publicContentCountFilter = { where: { content: { status: "PUBLISHED" as const, visibility: "PUBLIC" as const, deletedAt: null } } };
 
-export async function getStoryBySlug(slug: string) {
+export async function getItemBySlug(type: ContentType, slug: string) {
   return prisma.content.findFirst({
-    where: { slug, type: "STORY" },
-    include: {
-      creator: true,
-      story: true,
-      categories: { include: { category: true } },
-      tags: { include: { tag: true } },
-    },
+    where: { slug, type },
+    include: { creator: true, categories: { include: { category: true } }, tags: { include: { tag: true } } },
   });
 }
 
-export const CHAPTER_LIST_PAGE_SIZE = 100;
+/** For a "single" partsMode type — the one ContentPart holding its whole body. */
+export async function getSinglePart(contentId: string) {
+  return prisma.contentPart.findFirst({ where: { contentId, slug: SINGLE_PART_SLUG, deletedAt: null } });
+}
+
+export const PART_LIST_PAGE_SIZE = 100;
 
 /**
- * Paginated so a story with thousands of chapters never renders them all
- * into one HTML page (bad for TTFB/LCP and for crawl budget). Each chapter
- * still gets its own indexable URL and its own sitemap entry regardless of
- * which page of this list it falls on.
+ * Paginated so an item with thousands of parts never renders them all into
+ * one HTML page (bad for TTFB/LCP and for crawl budget). Each part still
+ * gets its own indexable URL and its own sitemap entry regardless of which
+ * page of this list it falls on. Only meaningful for a "multi" type.
  */
-export async function getPublishedChapters(contentId: string, { limit = CHAPTER_LIST_PAGE_SIZE, offset = 0 }: { limit?: number; offset?: number } = {}) {
+export async function getPublishedParts(contentId: string, { limit = PART_LIST_PAGE_SIZE, offset = 0 }: { limit?: number; offset?: number } = {}) {
   const where = { contentId, status: "PUBLISHED" as const, deletedAt: null };
   const [items, total] = await Promise.all([
     prisma.contentPart.findMany({ where, orderBy: { position: "asc" }, take: limit, skip: offset }),
@@ -36,42 +45,43 @@ export async function getPublishedChapters(contentId: string, { limit = CHAPTER_
   return { items, total };
 }
 
-export async function getChapter(contentId: string, chapterSlug: string) {
-  return prisma.contentPart.findFirst({ where: { contentId, slug: chapterSlug } });
+export async function getPart(contentId: string, partSlug: string) {
+  return prisma.contentPart.findFirst({ where: { contentId, slug: partSlug } });
 }
 
 /**
  * Raw view count for public display (docs/REVENUE.md: RAW -> VALID ->
  * QUALIFIED -> MONETIZED). Deliberately sums the `rawViews` stage only —
  * qualified/monetized figures are revenue-facing and must never surface
- * here. ContentView has no story-level rows, so a story's total is the sum
- * across all of its chapters' daily aggregates.
+ * here. A "multi" type's total is the sum across all of its parts' daily
+ * aggregates; a "single" type's total already lives at the item level.
  */
-export async function getStoryViewCount(contentId: string): Promise<number> {
+export async function getItemViewCount(contentId: string): Promise<number> {
   const result = await prisma.contentView.aggregate({ where: { contentId }, _sum: { rawViews: true } });
   return result._sum.rawViews ?? 0;
 }
 
-export async function getChapterViewCount(contentId: string, contentPartId: string): Promise<number> {
+export async function getPartViewCount(contentId: string, contentPartId: string): Promise<number> {
   const result = await prisma.contentView.aggregate({ where: { contentId, contentPartId }, _sum: { rawViews: true } });
   return result._sum.rawViews ?? 0;
 }
 
-export async function getAdjacentChapters(contentId: string, position: number) {
-  const [previousChapter, nextChapter] = await Promise.all([
+export async function getAdjacentParts(contentId: string, position: number) {
+  const [previousPart, nextPart] = await Promise.all([
     prisma.contentPart.findFirst({ where: { contentId, status: "PUBLISHED", position: { lt: position } }, orderBy: { position: "desc" } }),
     prisma.contentPart.findFirst({ where: { contentId, status: "PUBLISHED", position: { gt: position } }, orderBy: { position: "asc" } }),
   ]);
-  return { previousChapter, nextChapter };
+  return { previousPart, nextPart };
 }
 
 export async function getAuthorBySlug(slug: string) {
   return prisma.creatorProfile.findFirst({ where: { slug, deletedAt: null } });
 }
 
-export async function getAuthorStories(creatorId: string) {
+/** Every published item by this creator, across all ContentTypes — the author page groups them by `type`. */
+export async function getAuthorItems(creatorId: string) {
   return prisma.content.findMany({
-    where: { creatorId, ...publicStoryWhere },
+    where: { creatorId, status: "PUBLISHED", visibility: "PUBLIC", deletedAt: null },
     orderBy: { publishedAt: "desc" },
   });
 }
@@ -83,8 +93,8 @@ export async function getCategoryBySlug(slug: string) {
   });
 }
 
-export async function getCategoryStories(categoryId: string, { limit = 24, offset = 0 } = {}) {
-  const where = { ...publicStoryWhere, categories: { some: { categoryId } } };
+export async function getCategoryItems(categoryId: string, { limit = 24, offset = 0 } = {}) {
+  const where = { status: "PUBLISHED" as const, visibility: "PUBLIC" as const, deletedAt: null, categories: { some: { categoryId } } };
   const [items, total] = await Promise.all([
     prisma.content.findMany({ where, orderBy: { publishedAt: "desc" }, take: limit, skip: offset }),
     prisma.content.count({ where }),
@@ -93,14 +103,17 @@ export async function getCategoryStories(categoryId: string, { limit = 24, offse
 }
 
 /**
- * "Truyện liên quan" (spec: internal linking via real HTML <a>, no keyword
- * stuffing). Prefers stories sharing a category; falls back to the same
- * author when the story has no category yet. Always excludes itself.
+ * "Liên quan" (spec: internal linking via real HTML <a>, no keyword
+ * stuffing). Prefers same-type items sharing a category; falls back to the
+ * same author when the item has no category yet. Always excludes itself,
+ * and always stays within the same ContentType (a related "truyện" should
+ * never surface a "tin tức").
  */
-export async function getRelatedStories(content: { id: string; creatorId: string; categoryIds: string[] }, limit = 6) {
+export async function getRelatedItems(type: ContentType, content: { id: string; creatorId: string; categoryIds: string[] }, limit = 6) {
+  const where = publicWhere(type);
   if (content.categoryIds.length > 0) {
     const byCategory = await prisma.content.findMany({
-      where: { ...publicStoryWhere, id: { not: content.id }, categories: { some: { categoryId: { in: content.categoryIds } } } },
+      where: { ...where, id: { not: content.id }, categories: { some: { categoryId: { in: content.categoryIds } } } },
       orderBy: { publishedAt: "desc" },
       take: limit,
     });
@@ -108,7 +121,7 @@ export async function getRelatedStories(content: { id: string; creatorId: string
   }
 
   return prisma.content.findMany({
-    where: { ...publicStoryWhere, id: { not: content.id }, creatorId: content.creatorId },
+    where: { ...where, id: { not: content.id }, creatorId: content.creatorId },
     orderBy: { publishedAt: "desc" },
     take: limit,
   });
@@ -121,25 +134,32 @@ export async function getTagBySlug(slug: string) {
   });
 }
 
-export async function getTagStories(tagId: string) {
+export async function getTagItems(tagId: string) {
   return prisma.content.findMany({
-    where: { ...publicStoryWhere, tags: { some: { tagId } } },
+    where: { status: "PUBLISHED", visibility: "PUBLIC", deletedAt: null, tags: { some: { tagId } } },
     orderBy: { publishedAt: "desc" },
   });
 }
 
 export async function getHomepageData() {
-  const [latest, popularCategories, creators] = await Promise.all([
-    prisma.content.findMany({ where: publicStoryWhere, orderBy: { publishedAt: "desc" }, take: 12, include: { creator: true } }),
+  const [popularCategories, creators] = await Promise.all([
     prisma.category.findMany({ where: { deletedAt: null }, take: 8 }),
-    prisma.creatorProfile.findMany({ where: { deletedAt: null, contents: { some: publicStoryWhere } }, take: 6 }),
+    prisma.creatorProfile.findMany({ where: { deletedAt: null, contents: { some: { status: "PUBLISHED", visibility: "PUBLIC", deletedAt: null } } }, take: 6 }),
   ]);
-  return { latest, popularCategories, creators };
+  return { popularCategories, creators };
 }
 
-export async function listPublishedStories({ limit = 24, offset = 0, categorySlug, tagSlug }: { limit?: number; offset?: number; categorySlug?: string; tagSlug?: string }) {
+/** Latest published items of one type, for the homepage's per-type section. */
+export async function getLatestItems(type: ContentType, limit = 12) {
+  return prisma.content.findMany({ where: publicWhere(type), orderBy: { publishedAt: "desc" }, take: limit, include: { creator: true } });
+}
+
+export async function listPublishedItems(
+  type: ContentType,
+  { limit = 24, offset = 0, categorySlug, tagSlug }: { limit?: number; offset?: number; categorySlug?: string; tagSlug?: string },
+) {
   const where = {
-    ...publicStoryWhere,
+    ...publicWhere(type),
     ...(categorySlug ? { categories: { some: { category: { slug: categorySlug } } } } : {}),
     ...(tagSlug ? { tags: { some: { tag: { slug: tagSlug } } } } : {}),
   };
@@ -149,3 +169,14 @@ export async function listPublishedStories({ limit = 24, offset = 0, categorySlu
   ]);
   return { items, total };
 }
+
+/** "Tin mới nhất khác" — most recent other items of the same type, excluding itself. */
+export async function getRecentItems(type: ContentType, excludeId: string, limit = 6) {
+  return prisma.content.findMany({
+    where: { ...publicWhere(type), id: { not: excludeId } },
+    orderBy: { publishedAt: "desc" },
+    take: limit,
+  });
+}
+
+export type { ContentTypeConfig };

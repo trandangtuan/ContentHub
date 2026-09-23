@@ -8,8 +8,9 @@ describe("buildLlmsTxt", () => {
 
   it("describes the site and public URL patterns using the configured domain", () => {
     expect(txt).toContain("# ContentHub");
-    expect(txt).toContain("https://example.com/truyen/{story-slug}");
-    expect(txt).toContain("https://example.com/truyen/{story-slug}/{chapter-slug}");
+    expect(txt).toContain("https://example.com/truyen/{slug}");
+    expect(txt).toContain("https://example.com/truyen/{slug}/{part-slug}");
+    expect(txt).toContain("https://example.com/tin-tuc/{slug}");
   });
 
   it("never includes private API or database schema details", () => {

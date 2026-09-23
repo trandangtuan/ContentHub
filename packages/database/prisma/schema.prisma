@@ -215,13 +215,18 @@ model Content {
   status           ContentStatus     @default(DRAFT)
   visibility       ContentVisibility @default(PRIVATE)
   language         String            @default("vi")
+  /// Generic bag for type-specific metadata (e.g. STORY: {subtitle, ageRating}).
+  /// A new ContentType needs no new table/migration for simple scalar fields —
+  /// only a genuinely new *shape* (like ARTICLE's single-part body) needs one.
+  /// Validated at the API boundary per-type (packages/seo's content-types
+  /// registry), not by the DB — same tradeoff already made for bodyJson.
+  attributes       Json?
   publishedAt      DateTime?         @map("published_at")
   createdAt        DateTime          @default(now()) @map("created_at")
   updatedAt        DateTime          @updatedAt @map("updated_at")
   deletedAt        DateTime?         @map("deleted_at")
 
   creator         CreatorProfile     @relation(fields: [creatorId], references: [id])
-  story           Story?
   parts           ContentPart[]
   categories      ContentCategory[]
   tags            ContentTag[]
@@ -247,24 +252,15 @@ model Content {
   @@map("contents")
 }
 
-/// Type-specific extension for Content.type = STORY. A future ARTICLE/VIDEO/etc.
-/// extension follows the same 1:1-with-Content pattern.
-model Story {
-  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  contentId   String    @unique @map("content_id") @db.Uuid
-  subtitle    String?
-  ageRating   String?   @map("age_rating")
-  createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @updatedAt @map("updated_at")
-  deletedAt   DateTime? @map("deleted_at")
-
-  content Content @relation(fields: [contentId], references: [id])
-
-  @@map("stories")
-}
-
-/// A unit of content within a Content item — a Story chapter today; an Article
-/// section, Video episode, or Podcast episode later reuses the same table.
+/// A unit of content within a Content item. Every ContentType uses this the
+/// same way, distinguished only by how many parts it has (packages/seo's
+/// content-types registry's `partsMode`): STORY is "multi" (a chapter per
+/// part, ordered, independently publishable); ARTICLE is "single" (exactly
+/// one part, created together with its Content, holding the whole post's
+/// body) — a news post reuses the exact same storage, versioning
+/// (ContentVersion) and view-tracking as a chapter, just always at position 1
+/// with no chapter-nav UI. A future type just needs a `partsMode` in the
+/// registry, not a new table.
 model ContentPart {
   id                 String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   contentId          String            @map("content_id") @db.Uuid

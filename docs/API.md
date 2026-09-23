@@ -20,23 +20,33 @@ is the executable version of it.
 
 ## Creator (all require a session; most require the `CREATOR` role and/or resource ownership)
 
+Per-`ContentType` routes (stories, articles, and their chapters) are
+registered generically from `packages/seo`'s content-type registry
+(`apps/api/src/routes/content.ts`'s `registerContentTypeRoutes`) — one
+function call per registry entry, not one route file per type. The table
+below shows `:apiResource` (`stories` for STORY, `articles` for ARTICLE
+today) and, for a "multi" `partsMode` type only, `:partsApiResource`
+(`chapters` for STORY — ARTICLE has none, since it's "single": exactly one
+part, created with its Content).
+
 | Method | Path | Notes |
 |---|---|---|
 | POST | `/creator/profile` | Becomes a Creator: creates `creator_profiles` + `wallets` rows, promotes `users.role` to `CREATOR`. 409 if already a creator. |
 | GET | `/creator/me` | The caller's own creator profile. |
-| GET | `/creator/stories` | The caller's own stories, any status (dashboard list view). |
-| GET | `/creator/stories/:id` | One of the caller's own stories (any status) — 403 if owned by someone else. |
-| POST | `/creator/stories` | Create a `DRAFT`/`PRIVATE` story. `{ title, subtitle?, description?, shortDescription?, language?, ageRating? }`. |
-| PATCH | `/creator/stories/:id` | Update fields; a `title` change generates a new slug and writes a 301 `redirects` row for the old path. |
-| POST | `/creator/stories/:id/publish` | 422 if `title`/`description` are missing; otherwise sets `PUBLISHED`/`PUBLIC`. |
-| POST | `/creator/stories/:id/unpublish` | Sets `UNPUBLISHED`. |
-| GET | `/creator/stories/:id/chapters` | All chapters of the story (any status). |
-| POST | `/creator/stories/:id/chapters` | Create a chapter. `{ title, bodyHtml, bodyJson? }`. Word count/reading time computed server-side; also seeds `content_versions` revision 1. |
-| GET | `/creator/chapters/:id` | One chapter. |
-| PATCH | `/creator/chapters/:id` | Update title/body. Every `bodyHtml` change appends a new `content_versions` row (autosave history). |
-| POST | `/creator/chapters/:id/publish` | `{ scheduledAt? }`. Without `scheduledAt`: publishes immediately. With it: sets `SCHEDULED` (a worker to flip it to `PUBLISHED` at the target time is not built — see docs/ARCHITECTURE.md). |
-| POST | `/creator/chapters/:id/unpublish` | Sets `UNPUBLISHED`. |
-| GET | `/creator/analytics` | Follower count + per-story raw/qualified/monetized view totals. |
+| GET | `/creator/:apiResource` | The caller's own items of that type, any status (dashboard list view). A "single" type's items include their one `parts[0]`. |
+| GET | `/creator/:apiResource/:id` | One of the caller's own items (any status) — 403 if owned by someone else, 404 if the id belongs to a different `ContentType`. |
+| POST | `/creator/:apiResource` | Create a `DRAFT`/`PRIVATE` item. `{ title, description?, shortDescription?, coverImage?, language?, categoryIds?, attributes? }` — `attributes` is the type's scalar metadata (e.g. STORY's `{subtitle, ageRating}`). A "single" type also accepts `bodyHtml`/`bodyJson` here, creating its one part in the same call. |
+| PATCH | `/creator/:apiResource/:id` | Update fields; a `title` change generates a new slug and writes a 301 `redirects` row for the old path. A "single" type's `bodyHtml` update also appends a `content_versions` row. |
+| POST | `/creator/:apiResource/:id/publish` | 422 if required fields are missing (`title`+`description` for "multi"; `title`+body for "single"); otherwise sets `PUBLISHED`/`PUBLIC` (and, for "single", its one part to `PUBLISHED` too). |
+| POST | `/creator/:apiResource/:id/unpublish` | Sets `UNPUBLISHED`. |
+| DELETE | `/creator/:apiResource/:id` | Soft delete (`deleted_at` + `UNPUBLISHED`). |
+| GET | `/creator/:apiResource/:id/:partsApiResource` | "multi" only: all chapters of the item (any status). |
+| POST | `/creator/:apiResource/:id/:partsApiResource` | "multi" only: create a chapter. `{ title, bodyHtml, bodyJson? }`. Word count/reading time computed server-side; also seeds `content_versions` revision 1. |
+| GET | `/creator/:partsApiResource/:id` | "multi" only: one chapter. |
+| PATCH | `/creator/:partsApiResource/:id` | "multi" only: update title/body. Every `bodyHtml` change appends a new `content_versions` row (autosave history). |
+| POST | `/creator/:partsApiResource/:id/publish` | "multi" only: `{ scheduledAt? }`. Without `scheduledAt`: publishes immediately. With it: sets `SCHEDULED` (a worker to flip it to `PUBLISHED` at the target time is not built — see docs/ARCHITECTURE.md). |
+| POST \| DELETE | `/creator/:partsApiResource/:id/unpublish` \| `/creator/:partsApiResource/:id` | "multi" only: unpublish, or soft-delete the chapter. |
+| GET | `/creator/analytics` | Follower count + per-item (any type) raw/qualified/monetized view totals. |
 | GET | `/creator/wallet` | `{ availableCents, pendingCents, paidCents, currency, transactions[] }` — never a bare balance (spec §71). |
 
 Ownership is enforced on every mutation: the resource's `creator_id` must
@@ -46,23 +56,25 @@ a-permission-error.
 
 ## Public (no auth; only `PUBLISHED` + `PUBLIC` + non-deleted content is ever returned)
 
+Also generic, from `apps/api/src/routes/public.ts`'s
+`registerPublicContentTypeRoutes` (one call per content-type registry entry).
+
 | Method | Path | Notes |
 |---|---|---|
-| GET | `/public/stories` | `?limit&offset&category&tag`. |
-| GET | `/public/stories/:slug` | Full story detail incl. published chapter list. 404 if missing/unpublished/private, 410 if soft-deleted. |
-| GET | `/public/stories/:slug/chapters` | Published chapters only. |
-| GET | `/public/stories/:storySlug/chapters/:chapterSlug` | Chapter body + story/author context + prev/next chapter. 404/410 per the same rule as the story endpoint. |
-| GET | `/public/authors/:slug` | Author profile + their published stories only. |
+| GET | `/public/:apiResource` | `?limit&offset&category&tag`. |
+| GET | `/public/:apiResource/:slug` | Full item detail — a "multi" type includes its published chapter list (`chapters`), a "single" type includes its one part flattened into `bodyHtml`/`wordCount`/`readingTimeMinutes`. 404 if missing/unpublished/private, 410 if soft-deleted. |
+| GET | `/public/:apiResource/:slug/:partsApiResource` | "multi" only: published chapters only. |
+| GET | `/public/:apiResource/:itemSlug/:partsApiResource/:partSlug` | "multi" only: chapter body + item/author context + prev/next chapter. 404/410 per the same rule as the item endpoint. |
+| GET | `/public/authors/:slug` | Author profile + all of their published items, any type. |
 | GET | `/public/categories/:slug` | `?limit&offset`. |
-| GET | `/public/tags/:slug` | Includes `isIndexable` (≥2 stories) so a client can decide whether to render it as an SEO landing page. |
+| GET | `/public/tags/:slug` | Includes `isIndexable` (≥2 items) so a client can decide whether to render it as an SEO landing page. |
 | GET | `/public/search` | `?q&limit` — Postgres full-text search (`packages/search`). |
 
 Every public response is built by `apps/api/src/serializers.ts`'s
-`serializePublicStory` (or equivalent inline shaping for the other
-endpoints) — the one place that guarantees `email`, wallet/revenue fields,
-and moderation data are never present in a public response (spec §25,
-§82 rule 7), independent of whatever gets added to the Prisma `include` for
-some other reason later.
+`serializePublicContent` — the one place that guarantees `email`, wallet/
+revenue fields, and moderation data are never present in a public response
+(spec §25, §82 rule 7), independent of whatever gets added to the Prisma
+`include` for some other reason later.
 
 Crawlers do **not** need this API to read content — the HTML pages
 (`apps/web`) are fully server-rendered independently. This API exists for
@@ -115,7 +127,7 @@ Status codes used: `401` (no/invalid session), `403` (authenticated but not
 permitted — wrong owner, missing/invalid CSRF token, insufficient role),
 `404` (never existed, or exists but not publicly visible), `409`
 (conflict — duplicate email, duplicate redirect), `410` (permanently
-removed — public story/chapter endpoints only), `422` (validation failure —
+removed — public item/part endpoints only), `422` (validation failure —
 zod parse errors, or a business rule like "can't publish without a
 description"), `429` (rate limited), `500` (unhandled).
 

@@ -257,6 +257,74 @@ describe("Story + chapter lifecycle", () => {
     const versions = await prisma.contentVersion.findMany({ where: { contentPartId: chapter.id }, orderBy: { versionNumber: "asc" } });
     expect(versions.map((v) => v.versionNumber)).toEqual([1, 2]);
   });
+
+  it("deletes a chapter (soft delete): drops out of the list, 404s on lookup and on the public route", async () => {
+    const { cookies, csrfToken } = await registerAndBecomeCreator("Delete Chapter Author");
+
+    const createStory = await app.inject({
+      method: "POST",
+      url: "/api/v1/creator/stories",
+      cookies,
+      headers: { "x-csrf-token": csrfToken },
+      payload: { title: `Delete Chapter Story ${runSuffix}`, description: "d" },
+    });
+    const story = createStory.json();
+    await app.inject({ method: "POST", url: `/api/v1/creator/stories/${story.id}/publish`, cookies, headers: { "x-csrf-token": csrfToken } });
+
+    const addChapter = await app.inject({
+      method: "POST",
+      url: `/api/v1/creator/stories/${story.id}/chapters`,
+      cookies,
+      headers: { "x-csrf-token": csrfToken },
+      payload: { title: "To Be Deleted", bodyHtml: "<p>x</p>" },
+    });
+    const chapter = addChapter.json();
+    await app.inject({ method: "POST", url: `/api/v1/creator/chapters/${chapter.id}/publish`, cookies, headers: { "x-csrf-token": csrfToken } });
+
+    const deleteRes = await app.inject({ method: "DELETE", url: `/api/v1/creator/chapters/${chapter.id}`, cookies, headers: { "x-csrf-token": csrfToken } });
+    expect(deleteRes.statusCode).toBe(204);
+
+    const getDeleted = await app.inject({ method: "GET", url: `/api/v1/creator/chapters/${chapter.id}`, cookies });
+    expect(getDeleted.statusCode).toBe(404);
+
+    const list = await app.inject({ method: "GET", url: `/api/v1/creator/stories/${story.id}/chapters`, cookies });
+    expect(list.json().chapters.map((c: { id: string }) => c.id)).not.toContain(chapter.id);
+
+    // 410 (not 404): the public route treats a soft-deleted chapter as
+    // permanently gone (GoneError, docs/SEO.md) rather than "not found".
+    const publicRoute = await app.inject({ method: "GET", url: `/api/v1/public/stories/${story.slug}/chapters/${chapter.slug}` });
+    expect(publicRoute.statusCode).toBe(410);
+  });
+
+  it("forbids a different creator from deleting someone else's chapter", async () => {
+    const owner = await registerAndBecomeCreator("Chapter Owner");
+    const intruder = await registerAndBecomeCreator("Chapter Intruder");
+
+    const createStory = await app.inject({
+      method: "POST",
+      url: "/api/v1/creator/stories",
+      cookies: owner.cookies,
+      headers: { "x-csrf-token": owner.csrfToken },
+      payload: { title: "Owned Chapter Story", description: "d" },
+    });
+    const story = createStory.json();
+    const addChapter = await app.inject({
+      method: "POST",
+      url: `/api/v1/creator/stories/${story.id}/chapters`,
+      cookies: owner.cookies,
+      headers: { "x-csrf-token": owner.csrfToken },
+      payload: { title: "Owned Chapter", bodyHtml: "<p>x</p>" },
+    });
+    const chapter = addChapter.json();
+
+    const response = await app.inject({
+      method: "DELETE",
+      url: `/api/v1/creator/chapters/${chapter.id}`,
+      cookies: intruder.cookies,
+      headers: { "x-csrf-token": intruder.csrfToken },
+    });
+    expect(response.statusCode).toBe(403);
+  });
 });
 
 describe("Categories", () => {

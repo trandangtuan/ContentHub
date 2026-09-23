@@ -7,12 +7,14 @@ import rateLimit from "@fastify/rate-limit";
 import multipart from "@fastify/multipart";
 import staticFiles from "@fastify/static";
 import { ZodError } from "zod";
+import { CONTENT_TYPES } from "@contenthub/seo";
 import type { ApiConfig } from "./config.js";
 import { AppError } from "./errors.js";
 import authPlugin from "./plugins/auth.js";
 import { registerAuthRoutes } from "./routes/auth.js";
 import { registerCreatorRoutes } from "./routes/creator.js";
-import { registerPublicRoutes } from "./routes/public.js";
+import { registerContentTypeRoutes } from "./routes/content.js";
+import { registerPublicRoutes, registerPublicContentTypeRoutes } from "./routes/public.js";
 import { registerEventRoutes } from "./routes/events.js";
 import { registerAdminRoutes } from "./routes/admin.js";
 import { registerUploadRoutes } from "./routes/uploads.js";
@@ -75,6 +77,10 @@ export function buildApp(config: ApiConfig): FastifyInstance {
     async (v1) => {
       registerAuthRoutes(v1, config);
       registerCreatorRoutes(v1);
+      for (const contentType of CONTENT_TYPES) {
+        registerContentTypeRoutes(v1, contentType);
+        registerPublicContentTypeRoutes(v1, contentType);
+      }
       registerPublicRoutes(v1);
       registerEventRoutes(v1, config);
       registerAdminRoutes(v1);

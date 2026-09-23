@@ -19,7 +19,7 @@ export default function robots(): MetadataRoute.Robots {
 
   return {
     rules: [
-      { userAgent: "*", allow: ["/truyen/", "/tac-gia/", "/the-loai/", "/tag/"], disallow: ["/dashboard/", "/api/", "/admin/", "/auth/", "/login/", "/register/"] },
+      { userAgent: "*", allow: ["/truyen/", "/tac-gia/", "/the-loai/", "/tag/", "/tin-tuc/"], disallow: ["/dashboard/", "/api/", "/admin/", "/auth/", "/login/", "/register/"] },
       ...disallowedAgents.map((agent) => ({ userAgent: agent, disallow: "/" })),
     ],
     sitemap: `${config.siteUrl}/sitemap.xml`,

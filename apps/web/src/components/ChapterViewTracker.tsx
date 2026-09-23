@@ -27,7 +27,7 @@ function getOrCreateSessionId(): string {
  * RAW->VALID->QUALIFIED pipeline thresholds on. Uses sendBeacon so it never
  * blocks or gets cancelled by navigation.
  */
-export function ChapterViewTracker({ contentId, contentPartId }: { contentId: string; contentPartId: string }) {
+export function ChapterViewTracker({ contentId, contentPartId }: { contentId: string; contentPartId?: string }) {
   const startRef = useRef(0);
   const maxScrollRef = useRef(0);
   const sentRef = useRef(false);

@@ -46,6 +46,57 @@ export function buildCreativeWorkJsonLd(config: SeoConfig, input: BookJsonLdInpu
   };
 }
 
+export interface ArticleJsonLdInput {
+  headline: string;
+  description: string;
+  image?: string;
+  authorName: string;
+  authorUrl: string;
+  inLanguage: string;
+  datePublished?: string;
+  dateModified?: string;
+}
+
+/** NewsArticle (schema.org): the correct type for a daily-news "tin tức" post — Book/CreativeWork don't fit. */
+export function buildNewsArticleJsonLd(config: SeoConfig, input: ArticleJsonLdInput) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "NewsArticle",
+    headline: input.headline,
+    description: input.description,
+    ...(input.image ? { image: [input.image] } : {}),
+    author: { "@type": "Person", name: input.authorName, url: input.authorUrl },
+    inLanguage: input.inLanguage,
+    ...(input.datePublished ? { datePublished: input.datePublished } : {}),
+    ...(input.dateModified ? { dateModified: input.dateModified } : {}),
+    publisher: {
+      "@type": "Organization",
+      name: config.siteName,
+      url: config.siteUrl,
+      logo: { "@type": "ImageObject", url: `${config.siteUrl}/og-default.png` },
+    },
+  };
+}
+
+export interface ContentJsonLdInput {
+  title: string;
+  description: string;
+  image?: string;
+  authorName: string;
+  authorUrl: string;
+  inLanguage: string;
+  datePublished?: string;
+  dateModified?: string;
+}
+
+/** Dispatches to the right schema.org shape for a ContentType (its registry's `jsonLd` field) — the generic detail page never picks Book vs NewsArticle itself. */
+export function buildContentJsonLd(config: SeoConfig, kind: "book" | "newsArticle", input: ContentJsonLdInput) {
+  if (kind === "newsArticle") {
+    return buildNewsArticleJsonLd(config, { headline: input.title, ...input });
+  }
+  return buildBookJsonLd(config, { name: input.title, ...input });
+}
+
 export interface PersonJsonLdInput {
   name: string;
   url: string;

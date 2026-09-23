@@ -1,4 +1,5 @@
 export * from "./config";
+export * from "./content-types";
 export * from "./canonical";
 export * from "./robots";
 export * from "./metadata";

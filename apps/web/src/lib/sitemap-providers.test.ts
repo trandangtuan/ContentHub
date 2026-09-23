@@ -1,10 +1,16 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { prisma, ContentType, ContentStatus, ContentVisibility, ContentPartStatus } from "@contenthub/database";
-import { StorySitemapProvider, ChapterSitemapProvider, CategorySitemapProvider, TagSitemapProvider } from "./sitemap-providers";
+import { CONTENT_TYPES, SINGLE_PART_SLUG } from "@contenthub/seo";
+import { ContentSitemapProvider, PartSitemapProvider, CategorySitemapProvider, TagSitemapProvider } from "./sitemap-providers";
+
+const storyConfig = CONTENT_TYPES.find((c) => c.type === "STORY")!;
+const articleConfig = CONTENT_TYPES.find((c) => c.type === "ARTICLE")!;
 
 let publicSlug: string;
 let draftSlug: string;
 let deletedSlug: string;
+let publicArticleSlug: string;
+let draftArticleSlug: string;
 let thinTagSlug: string;
 let indexableTagSlug: string;
 let thinCategorySlug: string;
@@ -92,6 +98,33 @@ beforeAll(async () => {
   });
   deletedSlug = deleted.slug;
 
+  const publicArticle = await prisma.content.create({
+    data: {
+      creatorId: creator.id,
+      type: ContentType.ARTICLE,
+      title: "Sitemap Public Article",
+      slug: `sitemap-public-article-${suffix}`,
+      status: ContentStatus.PUBLISHED,
+      visibility: ContentVisibility.PUBLIC,
+      publishedAt: new Date(),
+      parts: { create: { title: "Sitemap Public Article", slug: SINGLE_PART_SLUG, position: 1, bodyHtml: "<p>news</p>", wordCount: 1, status: ContentPartStatus.PUBLISHED, publishedAt: new Date() } },
+    },
+  });
+  publicArticleSlug = publicArticle.slug;
+
+  const draftArticle = await prisma.content.create({
+    data: {
+      creatorId: creator.id,
+      type: ContentType.ARTICLE,
+      title: "Sitemap Draft Article",
+      slug: `sitemap-draft-article-${suffix}`,
+      status: ContentStatus.DRAFT,
+      visibility: ContentVisibility.PRIVATE,
+      parts: { create: { title: "Sitemap Draft Article", slug: SINGLE_PART_SLUG, position: 1, bodyHtml: "<p>draft</p>", wordCount: 1 } },
+    },
+  });
+  draftArticleSlug = draftArticle.slug;
+
   const thinCategory = await prisma.category.create({ data: { slug: `thin-category-sitemap-${suffix}`, name: "Thin Category Sitemap" } });
   thinCategorySlug = thinCategory.slug;
   const indexableCategory = await prisma.category.create({ data: { slug: `indexable-category-sitemap-${suffix}`, name: "Indexable Category Sitemap" } });
@@ -144,22 +177,22 @@ afterAll(async () => {
   await prisma.$disconnect();
 });
 
-describe("StorySitemapProvider", () => {
+describe("ContentSitemapProvider (STORY)", () => {
   it("includes published public stories and excludes drafts", async () => {
-    const { entries } = await new StorySitemapProvider().getUrls("1");
+    const { entries } = await new ContentSitemapProvider(storyConfig).getUrls("1");
     const locs = entries.map((e) => e.loc);
     expect(locs.some((l) => l.includes(publicSlug))).toBe(true);
     expect(locs.some((l) => l.includes(draftSlug))).toBe(false);
   });
 
   it("excludes a soft-deleted story even though it's PUBLISHED+PUBLIC", async () => {
-    const { entries } = await new StorySitemapProvider().getUrls("1");
+    const { entries } = await new ContentSitemapProvider(storyConfig).getUrls("1");
     const locs = entries.map((e) => e.loc);
     expect(locs.some((l) => l.includes(deletedSlug))).toBe(false);
   });
 
   it("every entry has both loc and lastmod", async () => {
-    const { entries } = await new StorySitemapProvider().getUrls("1");
+    const { entries } = await new ContentSitemapProvider(storyConfig).getUrls("1");
     for (const entry of entries) {
       expect(entry.loc).toMatch(/^https:\/\/example\.com\/truyen\//);
       expect(entry.lastmod).toBeTruthy();
@@ -167,9 +200,25 @@ describe("StorySitemapProvider", () => {
   });
 });
 
-describe("ChapterSitemapProvider", () => {
+describe("ContentSitemapProvider (ARTICLE) — same generic class, different registry entry", () => {
+  it("includes published public articles and excludes drafts", async () => {
+    const { entries } = await new ContentSitemapProvider(articleConfig).getUrls("1");
+    const locs = entries.map((e) => e.loc);
+    expect(locs.some((l) => l.includes(publicArticleSlug))).toBe(true);
+    expect(locs.some((l) => l.includes(draftArticleSlug))).toBe(false);
+  });
+
+  it("every entry points at /tin-tuc/", async () => {
+    const { entries } = await new ContentSitemapProvider(articleConfig).getUrls("1");
+    for (const entry of entries) {
+      expect(entry.loc).toMatch(/^https:\/\/example\.com\/tin-tuc\//);
+    }
+  });
+});
+
+describe("PartSitemapProvider (STORY chapters)", () => {
   it("includes only published chapters of published public stories", async () => {
-    const { entries } = await new ChapterSitemapProvider().getUrls("1");
+    const { entries } = await new PartSitemapProvider(storyConfig).getUrls("1");
     const locs = entries.map((e) => e.loc);
     expect(locs.some((l) => l === `https://example.com/truyen/${publicSlug}/c1`)).toBe(true);
     expect(locs.some((l) => l.includes("/c2"))).toBe(false);

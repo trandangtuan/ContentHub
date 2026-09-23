@@ -7,9 +7,12 @@ import type { SeoConfig } from "./config";
  */
 export const paths = {
   home: () => "/",
-  storyList: () => "/truyen",
-  story: (storySlug: string) => `/truyen/${storySlug}`,
-  chapter: (storySlug: string, chapterSlug: string) => `/truyen/${storySlug}/${chapterSlug}`,
+  /** A content type's list page, e.g. section("truyen") -> "/truyen". */
+  section: (urlPrefix: string) => `/${urlPrefix}`,
+  /** A content item's detail page, e.g. item("truyen", slug) -> "/truyen/{slug}". */
+  item: (urlPrefix: string, itemSlug: string) => `/${urlPrefix}/${itemSlug}`,
+  /** A "multi" type's part (chapter) page — never used for a "single" type. */
+  part: (urlPrefix: string, itemSlug: string, partSlug: string) => `/${urlPrefix}/${itemSlug}/${partSlug}`,
   authorList: () => "/tac-gia",
   author: (creatorSlug: string) => `/tac-gia/${creatorSlug}`,
   categoryList: () => "/the-loai",

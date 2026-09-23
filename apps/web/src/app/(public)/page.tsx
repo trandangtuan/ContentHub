@@ -3,10 +3,10 @@ export const dynamic = "force-dynamic";
 
 import type { Metadata } from "next";
 import Link from "next/link";
-import { buildPageMetadata, buildWebPageJsonLd, getRobotsMetadata } from "@contenthub/seo";
+import { buildPageMetadata, buildWebPageJsonLd, getRobotsMetadata, paths, CONTENT_TYPES } from "@contenthub/seo";
 import { getSeoConfig } from "@/lib/seo-config";
-import { getHomepageData } from "@/lib/public-data";
-import { StoryCard } from "@/components/StoryCard";
+import { getHomepageData, getLatestItems } from "@/lib/public-data";
+import { ContentCard } from "@/components/ContentCard";
 import { JsonLd } from "@/components/JsonLd";
 
 export function generateMetadata(): Metadata {
@@ -21,9 +21,16 @@ export function generateMetadata(): Metadata {
   return meta as Metadata;
 }
 
+/**
+ * One "mới cập nhật" section per ContentType (packages/seo's registry) — a
+ * new type shows up on the homepage automatically, no new section to write.
+ */
 export default async function HomePage() {
   const config = getSeoConfig();
-  const { latest, popularCategories, creators } = await getHomepageData();
+  const [{ popularCategories, creators }, latestByType] = await Promise.all([
+    getHomepageData(),
+    Promise.all(CONTENT_TYPES.map((c) => getLatestItems(c.type, c.partsMode === "multi" ? 12 : 6))),
+  ]);
 
   return (
     <main>
@@ -35,26 +42,32 @@ export default async function HomePage() {
       </div>
 
       <div className="container">
-        <section>
-          <div className="section-head">
-            <h2>Truyện mới cập nhật</h2>
-            <Link href="/truyen" className="text-sm">
-              Xem tất cả →
-            </Link>
-          </div>
-          {latest.length === 0 ? (
-            <p className="empty-state">Chưa có truyện nào được xuất bản.</p>
-          ) : (
-            <div className="card-grid">
-              {latest.map((story) => (
-                <StoryCard
-                  key={story.id}
-                  story={{ slug: story.slug, title: story.title, coverImage: story.coverImage, shortDescription: story.shortDescription, creatorName: story.creator.displayName }}
-                />
-              ))}
-            </div>
-          )}
-        </section>
+        {CONTENT_TYPES.map((typeConfig, i) => {
+          const items = latestByType[i]!;
+          return (
+            <section key={typeConfig.type}>
+              <div className="section-head">
+                <h2>{typeConfig.label} mới cập nhật</h2>
+                <Link href={paths.section(typeConfig.urlPrefix)} className="text-sm">
+                  Xem tất cả →
+                </Link>
+              </div>
+              {items.length === 0 ? (
+                <p className="empty-state">Chưa có {typeConfig.itemLabel} nào được xuất bản.</p>
+              ) : (
+                <div className="card-grid">
+                  {items.map((item) => (
+                    <ContentCard
+                      key={item.id}
+                      config={typeConfig}
+                      item={{ slug: item.slug, title: item.title, coverImage: item.coverImage, shortDescription: item.shortDescription, publishedAt: item.publishedAt, creatorName: item.creator.displayName }}
+                    />
+                  ))}
+                </div>
+              )}
+            </section>
+          );
+        })}
 
         <section>
           <div className="section-head">
