@@ -12,6 +12,7 @@ import { sanitizeContentHtml } from "@/lib/sanitize";
 import { Breadcrumbs } from "@/components/Breadcrumbs";
 import { JsonLd } from "@/components/JsonLd";
 import { ChapterViewTracker } from "@/components/ChapterViewTracker";
+import { Comments } from "@/components/Comments";
 
 interface Params {
   section: string;
@@ -103,6 +104,10 @@ export default async function PartPage({ params }: { params: Promise<Params> }) 
           {nextPart ? <Link href={paths.part(typeConfig.urlPrefix, item.slug, nextPart.slug)}>{nextPart.title} &rarr;</Link> : <span aria-disabled="true">Chương cuối &rarr;</span>}
         </nav>
       </article>
+
+      <div style={{ maxWidth: "70ch", margin: "0 auto" }}>
+        <Comments contentId={item.id} contentPartId={part.id} />
+      </div>
     </main>
   );
 }

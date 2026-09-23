@@ -86,6 +86,9 @@ dist
 # Local file uploads (packages/storage's LocalStorageProvider, apps/api's default UPLOADS_DIR)
 /apps/api/uploads/
 
+# Redis snapshot written by a locally-run redis-server (e.g. during test runs)
+dump.rdb
+
 # Gatsby files
 .cache/
 # Comment in the public line in if your project uses Gatsby and not Next.js

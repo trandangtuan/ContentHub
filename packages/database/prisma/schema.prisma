@@ -2,9 +2,12 @@
 // Design notes:
 // - Every table has id/created_at/updated_at; soft-deletable entities also have deleted_at.
 // - `Content` is the core polymorphic entity (User/Creator/Content/ContentPart/View/Revenue/Wallet/Payout —
-//   see docs/ARCHITECTURE.md). `Story` is a 1:1 extension of Content for type=STORY.
-//   Adding ARTICLE/COMIC/VIDEO/AUDIO/PODCAST later means adding a new extension table + enum value,
-//   not rewriting Content/ContentPart/View/Revenue.
+//   see docs/ARCHITECTURE.md). Every ContentType (STORY, ARTICLE, and future COMIC/VIDEO/AUDIO/PODCAST)
+//   shares the same Content row shape; type-specific scalar metadata lives in `Content.attributes`
+//   (Json) and a type's body lives in ContentPart — distinguished only by how many parts it has
+//   (packages/seo/src/content-types.ts's registry `partsMode`: "multi" = STORY's chapters, "single" =
+//   ARTICLE's one part). A new ContentType that fits one of those two shapes needs a registry entry,
+//   not a new table.
 // - Money is stored as integer cents (BigInt) with an explicit currency column. Percentages are Decimal.
 // - Revenue/wallet state is derived from immutable ledgers (RevenueTransaction, WalletTransaction);
 //   Wallet.balance* columns are caches, never the source of truth.

@@ -190,6 +190,17 @@ export interface AdminStats {
   pendingPayouts: number;
 }
 
+export interface CommentRecord {
+  id: string;
+  body: string;
+  depth: number;
+  parentId: string | null;
+  createdAt: string;
+  updatedAt: string;
+  author: { id: string; displayName: string; avatarUrl: string | null };
+  replies: CommentRecord[];
+}
+
 export interface SessionInfo {
   authenticated: boolean;
   userId?: string;
@@ -220,6 +231,10 @@ export const api = {
   listCategories: () => request<{ categories: CategoryRecord[] }>("/api/v1/creator/categories"),
   createCategory: (csrfToken: string, name: string) =>
     request<CategoryRecord>("/api/v1/creator/categories", api.withCsrf(csrfToken, { method: "POST", body: JSON.stringify({ name }) })),
+  updateCategory: (csrfToken: string, id: string, name: string) =>
+    request<CategoryRecord>(`/api/v1/creator/categories/${id}`, api.withCsrf(csrfToken, { method: "PATCH", body: JSON.stringify({ name }) })),
+  deleteCategory: (csrfToken: string, id: string) =>
+    request<void>(`/api/v1/creator/categories/${id}`, api.withCsrf(csrfToken, { method: "DELETE" })),
 
   /**
    * One factory bound to a ContentType's registry config (packages/seo) —
@@ -252,6 +267,14 @@ export const api = {
       unpublishPart: (csrfToken: string, partId: string) => request<PartRecord>(`${partsBase}/${partId}/unpublish`, api.withCsrf(csrfToken, { method: "POST" })),
       deletePart: (csrfToken: string, partId: string) => request<void>(`${partsBase}/${partId}`, api.withCsrf(csrfToken, { method: "DELETE" })),
     };
+  },
+
+  /** Comments are keyed on Content directly (contentId), so this one client covers every ContentType. */
+  comments: {
+    list: (contentId: string) => request<{ items: CommentRecord[]; total: number }>(`/api/v1/content/${contentId}/comments`),
+    create: (csrfToken: string, contentId: string, data: { body: string; parentId?: string; contentPartId?: string }) =>
+      request<CommentRecord>(`/api/v1/content/${contentId}/comments`, api.withCsrf(csrfToken, { method: "POST", body: JSON.stringify(data) })),
+    delete: (csrfToken: string, id: string) => request<void>(`/api/v1/comments/${id}`, api.withCsrf(csrfToken, { method: "DELETE" })),
   },
 
   getWallet: () => request("/api/v1/creator/wallet"),
