@@ -10,6 +10,7 @@ export default function EditChapterPage() {
   const [chapter, setChapter] = useState<ChapterRecord | null>(null);
 
   useEffect(() => {
+    setChapter(null);
     api.getChapter(chapterId).then(setChapter);
   }, [chapterId]);
 
@@ -20,6 +21,7 @@ export default function EditChapterPage() {
       <h1>Sửa chương</h1>
       <div className="card">
         <ChapterEditorForm
+          key={chapter.id}
           storyId={id}
           chapterId={chapter.id}
           initialTitle={chapter.title}

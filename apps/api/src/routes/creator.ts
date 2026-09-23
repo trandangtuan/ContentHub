@@ -392,6 +392,22 @@ export function registerCreatorRoutes(app: FastifyInstance) {
     return prisma.contentPart.update({ where: { id }, data: { status: "UNPUBLISHED" } });
   });
 
+  app.delete("/creator/chapters/:id", async (request, reply) => {
+    const session = app.requireAuth(request);
+    app.requireCsrf(request);
+    const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
+
+    const part = await prisma.contentPart.findUnique({ where: { id } });
+    if (!part || part.deletedAt) throw new NotFoundError("Chapter not found");
+    await requireOwnedStory(session, part.contentId);
+
+    // Soft delete (matches the Content-level pattern in packages/moderation):
+    // unpublish first so it drops out of the public reader/sitemap immediately,
+    // deletedAt keeps it out of every creator-facing list/query going forward.
+    await prisma.contentPart.update({ where: { id }, data: { deletedAt: new Date(), status: "UNPUBLISHED" } });
+    reply.status(204).send();
+  });
+
   // ── Analytics / wallet (read-only; all figures computed server-side) ───
   app.get("/creator/analytics", async (request) => {
     const session = app.requireAuth(request);

@@ -230,6 +230,8 @@ export const api = {
     request<ChapterRecord>(`/api/v1/creator/chapters/${chapterId}`, api.withCsrf(csrfToken, { method: "PATCH", body: JSON.stringify(data) })),
   publishChapter: (csrfToken: string, chapterId: string, scheduledAt?: string) =>
     request(`/api/v1/creator/chapters/${chapterId}/publish`, api.withCsrf(csrfToken, { method: "POST", body: JSON.stringify({ scheduledAt }) })),
+  deleteChapter: (csrfToken: string, chapterId: string) =>
+    request<void>(`/api/v1/creator/chapters/${chapterId}`, api.withCsrf(csrfToken, { method: "DELETE" })),
 
   getWallet: () => request("/api/v1/creator/wallet"),
   getAnalytics: () => request("/api/v1/creator/analytics"),

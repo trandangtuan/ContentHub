@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "@/lib/use-session";
-import { api } from "@/lib/api-client";
+import { api, type ChapterRecord } from "@/lib/api-client";
 import { Editor, type EditorStats } from "@/components/Editor";
 import { sanitizeContentHtml } from "@/lib/sanitize";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -36,9 +36,20 @@ export function ChapterEditorForm({ storyId, chapterId: initialChapterId, initia
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [preview, setPreview] = useState(false);
   const [scheduledAt, setScheduledAt] = useState("");
+  const [siblings, setSiblings] = useState<ChapterRecord[] | null>(null);
 
   const latest = useRef({ title, stats, chapterId, storyId });
   latest.current = { title, stats, chapterId, storyId };
+
+  // Powers the prev/next-chapter navigation below (docs/ARCHITECTURE.md #6):
+  // same story's chapters, in reading order.
+  useEffect(() => {
+    api.listChapters(storyId).then((res) => setSiblings(res.chapters));
+  }, [storyId, chapterId]);
+
+  const currentIndex = siblings?.findIndex((c) => c.id === chapterId) ?? -1;
+  const prevChapter = siblings && currentIndex > 0 ? siblings[currentIndex - 1] : null;
+  const nextChapter = siblings && currentIndex >= 0 && currentIndex < siblings.length - 1 ? siblings[currentIndex + 1] : null;
 
   const save = useCallback(async () => {
     if (!session?.csrfToken) return;
@@ -88,6 +99,23 @@ export function ChapterEditorForm({ storyId, chapterId: initialChapterId, initia
     return result.url;
   }
 
+  function addNewChapter() {
+    router.push(`/dashboard/stories/${storyId}/chapters/new`);
+  }
+
+  async function deleteChapterNow() {
+    if (!chapterId || !session?.csrfToken) return;
+    if (!window.confirm(`Xóa chương "${title || "này"}"? Hành động này không thể hoàn tác.`)) return;
+
+    try {
+      await api.deleteChapter(session.csrfToken, chapterId);
+      const target = nextChapter ?? prevChapter;
+      router.push(target ? `/dashboard/stories/${storyId}/chapters/${target.id}` : `/dashboard/stories/${storyId}/chapters`);
+    } catch {
+      window.alert("Không xóa được chương này, thử lại sau.");
+    }
+  }
+
   return (
     <div className="stack">
       <label htmlFor="chapterTitle">Tiêu đề chương</label>
@@ -112,6 +140,23 @@ export function ChapterEditorForm({ storyId, chapterId: initialChapterId, initia
         <button type="button" className="btn btn-sm" onClick={schedule} disabled={!chapterId || !scheduledAt}>
           Schedule publish
         </button>
+      </div>
+
+      <div className="row" style={{ flexWrap: "wrap", alignItems: "center" }}>
+        <button type="button" className="btn btn-sm" onClick={() => prevChapter && router.push(`/dashboard/stories/${storyId}/chapters/${prevChapter.id}`)} disabled={!prevChapter}>
+          ← Chương trước
+        </button>
+        <button type="button" className="btn btn-sm" onClick={() => nextChapter && router.push(`/dashboard/stories/${storyId}/chapters/${nextChapter.id}`)} disabled={!nextChapter}>
+          Chương sau →
+        </button>
+        <button type="button" className="btn btn-sm" onClick={addNewChapter}>
+          + Chương mới
+        </button>
+        {chapterId && (
+          <button type="button" className="btn btn-sm btn-danger" onClick={deleteChapterNow}>
+            Xóa chương
+          </button>
+        )}
       </div>
 
       {preview ? (
