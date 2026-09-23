@@ -18,6 +18,7 @@ import { registerPublicRoutes, registerPublicContentTypeRoutes } from "./routes/
 import { registerEventRoutes } from "./routes/events.js";
 import { registerAdminRoutes } from "./routes/admin.js";
 import { registerUploadRoutes } from "./routes/uploads.js";
+import { registerCommentRoutes } from "./routes/comments.js";
 
 // Largest of packages/storage's per-purpose limits (chapter-image, 8MB) plus
 // headroom — the real per-purpose ceiling is enforced by validateFileSize in
@@ -85,6 +86,7 @@ export function buildApp(config: ApiConfig): FastifyInstance {
       registerEventRoutes(v1, config);
       registerAdminRoutes(v1);
       registerUploadRoutes(v1, config);
+      registerCommentRoutes(v1);
     },
     { prefix: "/api/v1" },
   );

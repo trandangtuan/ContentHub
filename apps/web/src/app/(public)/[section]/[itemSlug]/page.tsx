@@ -30,6 +30,7 @@ import { ContentCard } from "@/components/ContentCard";
 import { Breadcrumbs } from "@/components/Breadcrumbs";
 import { JsonLd } from "@/components/JsonLd";
 import { ChapterViewTracker } from "@/components/ChapterViewTracker";
+import { Comments } from "@/components/Comments";
 import { sanitizeContentHtml } from "@/lib/sanitize";
 
 interface Params {
@@ -135,6 +136,8 @@ export default async function ContentDetailPage({ params, searchParams }: { para
             </section>
           )}
         </article>
+
+        <Comments contentId={item.id} />
       </main>
     );
   }
