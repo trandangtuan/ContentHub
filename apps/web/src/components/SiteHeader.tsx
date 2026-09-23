@@ -15,6 +15,7 @@ export function SiteHeader() {
         </Link>
         <nav className="site-nav" aria-label="Primary">
           <Link href={paths.storyList()}>Truyện</Link>
+          <Link href={paths.articleList()}>Tin tức</Link>
           <Link href={paths.categoryList()}>Thể loại</Link>
           <Link href={paths.authorList()}>Tác giả</Link>
         </nav>

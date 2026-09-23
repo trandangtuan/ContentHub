@@ -65,6 +65,7 @@ export function buildRobotsTxt(config: SeoConfig, options: RobotsTxtOptions = {}
     "Allow: /tac-gia/",
     "Allow: /the-loai/",
     "Allow: /tag/",
+    "Allow: /tin-tuc/",
     "Disallow: /dashboard/",
     "Disallow: /api/",
     "Disallow: /admin/",

@@ -15,6 +15,8 @@ export const paths = {
   categoryList: () => "/the-loai",
   category: (categorySlug: string) => `/the-loai/${categorySlug}`,
   tag: (tagSlug: string) => `/tag/${tagSlug}`,
+  articleList: () => "/tin-tuc",
+  article: (articleSlug: string) => `/tin-tuc/${articleSlug}`,
 };
 
 /**

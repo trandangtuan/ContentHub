@@ -89,6 +89,19 @@ export interface StoryRecord {
   categories?: { category: CategoryRecord }[];
 }
 
+export interface ArticleRecord {
+  id: string;
+  title: string;
+  slug: string;
+  description: string | null;
+  shortDescription?: string | null;
+  coverImage?: string | null;
+  status: string;
+  visibility: string;
+  publishedAt: string | null;
+  article: { bodyHtml: string | null; wordCount: number; readingTimeMinutes: number } | null;
+}
+
 export interface ChapterRecord {
   id: string;
   title: string;
@@ -232,6 +245,16 @@ export const api = {
     request(`/api/v1/creator/chapters/${chapterId}/publish`, api.withCsrf(csrfToken, { method: "POST", body: JSON.stringify({ scheduledAt }) })),
   deleteChapter: (csrfToken: string, chapterId: string) =>
     request<void>(`/api/v1/creator/chapters/${chapterId}`, api.withCsrf(csrfToken, { method: "DELETE" })),
+
+  listMyArticles: () => request<{ articles: ArticleRecord[] }>("/api/v1/creator/articles"),
+  getArticle: (id: string) => request<ArticleRecord>(`/api/v1/creator/articles/${id}`),
+  createArticle: (csrfToken: string, data: Record<string, unknown>) =>
+    request<ArticleRecord>("/api/v1/creator/articles", api.withCsrf(csrfToken, { method: "POST", body: JSON.stringify(data) })),
+  updateArticle: (csrfToken: string, id: string, data: Record<string, unknown>) =>
+    request<ArticleRecord>(`/api/v1/creator/articles/${id}`, api.withCsrf(csrfToken, { method: "PATCH", body: JSON.stringify(data) })),
+  publishArticle: (csrfToken: string, id: string) => request<ArticleRecord>(`/api/v1/creator/articles/${id}/publish`, api.withCsrf(csrfToken, { method: "POST" })),
+  unpublishArticle: (csrfToken: string, id: string) => request<ArticleRecord>(`/api/v1/creator/articles/${id}/unpublish`, api.withCsrf(csrfToken, { method: "POST" })),
+  deleteArticle: (csrfToken: string, id: string) => request<void>(`/api/v1/creator/articles/${id}`, api.withCsrf(csrfToken, { method: "DELETE" })),
 
   getWallet: () => request("/api/v1/creator/wallet"),
   getAnalytics: () => request("/api/v1/creator/analytics"),

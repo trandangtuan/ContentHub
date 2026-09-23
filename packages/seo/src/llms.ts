@@ -15,6 +15,7 @@ stories published by independent creators.
 
 - Stories
 - Chapters
+- News articles ("tin tức" — daily posts from creators)
 - Authors
 - Categories
 - Tags
@@ -24,6 +25,8 @@ stories published by independent creators.
 - ${config.siteUrl}/truyen/
 - ${config.siteUrl}/truyen/{story-slug}
 - ${config.siteUrl}/truyen/{story-slug}/{chapter-slug}
+- ${config.siteUrl}/tin-tuc/
+- ${config.siteUrl}/tin-tuc/{article-slug}
 - ${config.siteUrl}/tac-gia/{creator-slug}
 - ${config.siteUrl}/the-loai/{category-slug}
 - ${config.siteUrl}/tag/{tag-slug}
@@ -65,10 +68,10 @@ export function buildLlmsFullTxt(config: SeoConfig, stats: LlmsFullStats): strin
 
 ## Overview
 
-${config.siteName} is a modular user-generated content (UGC) platform. The
-first supported content type is STORY (serialized chapters); the architecture
-is designed to add ARTICLE, COMIC, VIDEO, AUDIO and PODCAST without changing
-how content is discovered or attributed.
+${config.siteName} is a modular user-generated content (UGC) platform.
+Supported content types today are STORY (serialized chapters) and ARTICLE
+(single-post daily news); the architecture is designed to add COMIC, VIDEO,
+AUDIO and PODCAST without changing how content is discovered or attributed.
 
 ## Scale (aggregate, public counts only)
 
@@ -84,6 +87,7 @@ ${categoryList || "  (none yet)"}
 
 - Story: ${config.siteUrl}/truyen/{story-slug}
 - Chapter: ${config.siteUrl}/truyen/{story-slug}/{chapter-slug}
+- News article: ${config.siteUrl}/tin-tuc/{article-slug}
 - Author: ${config.siteUrl}/tac-gia/{creator-slug}
 - Category: ${config.siteUrl}/the-loai/{category-slug}
 - Tag: ${config.siteUrl}/tag/{tag-slug}

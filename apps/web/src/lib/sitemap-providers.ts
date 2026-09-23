@@ -68,6 +68,33 @@ export class ChapterSitemapProvider implements SitemapProvider {
   }
 }
 
+export class ArticleSitemapProvider implements SitemapProvider {
+  key = "articles";
+
+  async getUrls(cursor?: string): Promise<SitemapPage> {
+    const page = cursor ? Number(cursor) : 1;
+    const { siteUrl } = getSeoConfig();
+
+    const rows = await prisma.content.findMany({
+      where: { type: "ARTICLE", status: "PUBLISHED", visibility: "PUBLIC", deletedAt: null },
+      orderBy: { id: "asc" },
+      skip: (page - 1) * MAX_URLS_PER_SITEMAP,
+      take: MAX_URLS_PER_SITEMAP,
+      select: { slug: true, updatedAt: true },
+    });
+
+    return {
+      entries: rows.map((r) => ({ loc: `${siteUrl}/tin-tuc/${r.slug}`, lastmod: r.updatedAt.toISOString() })),
+      nextCursor: rows.length === MAX_URLS_PER_SITEMAP ? String(page + 1) : null,
+    };
+  }
+
+  async pageCount(): Promise<number> {
+    const total = await prisma.content.count({ where: { type: "ARTICLE", status: "PUBLISHED", visibility: "PUBLIC", deletedAt: null } });
+    return Math.max(1, Math.ceil(total / MAX_URLS_PER_SITEMAP));
+  }
+}
+
 export class AuthorSitemapProvider implements SitemapProvider {
   key = "authors";
 

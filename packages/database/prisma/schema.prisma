@@ -222,6 +222,7 @@ model Content {
 
   creator         CreatorProfile     @relation(fields: [creatorId], references: [id])
   story           Story?
+  article         Article?
   parts           ContentPart[]
   categories      ContentCategory[]
   tags            ContentTag[]
@@ -261,6 +262,25 @@ model Story {
   content Content @relation(fields: [contentId], references: [id])
 
   @@map("stories")
+}
+
+/// Type-specific extension for Content.type = ARTICLE ("tin tức" — daily news
+/// posts). Unlike Story, an article's body lives here directly rather than in
+/// ContentPart: a news post is one unit, not a serialized set of chapters.
+model Article {
+  id                 String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  contentId          String    @unique @map("content_id") @db.Uuid
+  bodyJson           Json?     @map("body_json")
+  bodyHtml           String?   @map("body_html")
+  wordCount          Int       @default(0) @map("word_count")
+  readingTimeMinutes Int       @default(0) @map("reading_time_minutes")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+  deletedAt          DateTime? @map("deleted_at")
+
+  content Content @relation(fields: [contentId], references: [id])
+
+  @@map("articles")
 }
 
 /// A unit of content within a Content item — a Story chapter today; an Article

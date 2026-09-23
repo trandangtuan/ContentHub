@@ -10,6 +10,7 @@ describe("paths", () => {
     expect(paths.author("nguyen-van-an")).toBe("/tac-gia/nguyen-van-an");
     expect(paths.category("tien-hiep")).toBe("/the-loai/tien-hiep");
     expect(paths.tag("tu-tien")).toBe("/tag/tu-tien");
+    expect(paths.article("tin-cong-nghe-hom-nay")).toBe("/tin-tuc/tin-cong-nghe-hom-nay");
   });
 });
 

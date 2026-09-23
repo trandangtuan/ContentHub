@@ -7,6 +7,7 @@ import { AppSidebarNav } from "@/components/AppSidebarNav";
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Tổng quan", exact: true },
   { href: "/dashboard/stories", label: "Truyện" },
+  { href: "/dashboard/articles", label: "Tin tức" },
   { href: "/dashboard/analytics", label: "Analytics" },
   { href: "/dashboard/revenue", label: "Doanh thu" },
   { href: "/dashboard/wallet", label: "Ví" },

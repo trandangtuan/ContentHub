@@ -15,6 +15,7 @@ export const titleTemplates = {
     truncateText(`${authorName} – Truyện và tác phẩm – ${siteName}`, MAX_TITLE_LENGTH + 30),
   category: (categoryName: string, siteName: string) => truncateText(`${categoryName} – ${siteName}`, MAX_TITLE_LENGTH + 20),
   tag: (tagName: string, siteName: string) => truncateText(`Tag: ${tagName} – ${siteName}`, MAX_TITLE_LENGTH + 20),
+  article: (articleTitle: string, siteName: string) => truncateText(`${articleTitle} – ${siteName}`, MAX_TITLE_LENGTH + 20),
 };
 
 /** Story meta description: the creator's description, truncated at a word boundary — never the raw content body. */

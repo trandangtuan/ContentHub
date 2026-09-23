@@ -12,6 +12,7 @@ import { AppError } from "./errors.js";
 import authPlugin from "./plugins/auth.js";
 import { registerAuthRoutes } from "./routes/auth.js";
 import { registerCreatorRoutes } from "./routes/creator.js";
+import { registerArticleRoutes } from "./routes/articles.js";
 import { registerPublicRoutes } from "./routes/public.js";
 import { registerEventRoutes } from "./routes/events.js";
 import { registerAdminRoutes } from "./routes/admin.js";
@@ -75,6 +76,7 @@ export function buildApp(config: ApiConfig): FastifyInstance {
     async (v1) => {
       registerAuthRoutes(v1, config);
       registerCreatorRoutes(v1);
+      registerArticleRoutes(v1);
       registerPublicRoutes(v1);
       registerEventRoutes(v1, config);
       registerAdminRoutes(v1);

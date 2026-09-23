@@ -1,4 +1,4 @@
-import type { Content, ContentPart, CreatorProfile, Category, Tag, Story } from "@contenthub/database";
+import type { Content, ContentPart, CreatorProfile, Category, Tag, Story, Article } from "@contenthub/database";
 
 /**
  * Public API responses (spec #25): only what a reader/crawler may see.
@@ -30,6 +30,34 @@ export function serializePublicStory(
     genres: content.categories.map((c) => ({ slug: c.category.slug, name: c.category.name })),
     tags: content.tags.map((t) => ({ slug: t.tag.slug, name: t.tag.name })),
     url: `${siteUrl}/truyen/${content.slug}`,
+    publishedAt: content.publishedAt,
+    updatedAt: content.updatedAt,
+  };
+}
+
+/** Public API response for Content.type = ARTICLE ("tin tức" — daily news posts). */
+export function serializePublicArticle(
+  content: Content & { article: Article | null; creator: CreatorProfile },
+  siteUrl: string,
+) {
+  return {
+    id: content.id,
+    type: content.type,
+    title: content.title,
+    slug: content.slug,
+    description: content.description,
+    shortDescription: content.shortDescription,
+    coverImage: content.coverImage,
+    language: content.language,
+    bodyHtml: content.article?.bodyHtml ?? null,
+    wordCount: content.article?.wordCount ?? 0,
+    readingTimeMinutes: content.article?.readingTimeMinutes ?? 0,
+    author: {
+      slug: content.creator.slug,
+      name: content.creator.displayName,
+      url: `${siteUrl}/tac-gia/${content.creator.slug}`,
+    },
+    url: `${siteUrl}/tin-tuc/${content.slug}`,
     publishedAt: content.publishedAt,
     updatedAt: content.updatedAt,
   };

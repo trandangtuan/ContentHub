@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic";
 
 import { buildSitemapIndexXml } from "@contenthub/seo";
 import { getSeoConfig } from "@/lib/seo-config";
-import { StorySitemapProvider, ChapterSitemapProvider } from "@/lib/sitemap-providers";
+import { StorySitemapProvider, ChapterSitemapProvider, ArticleSitemapProvider } from "@/lib/sitemap-providers";
 import { xmlResponse } from "@/lib/xml-response";
 
 /**
@@ -15,15 +15,17 @@ export async function GET() {
   const { siteUrl } = getSeoConfig();
   const now = new Date().toISOString();
 
-  const [storyPages, chapterPages] = await Promise.all([
+  const [storyPages, chapterPages, articlePages] = await Promise.all([
     new StorySitemapProvider().pageCount(),
     new ChapterSitemapProvider().pageCount(),
+    new ArticleSitemapProvider().pageCount(),
   ]);
 
   const sitemaps = [
     { loc: `${siteUrl}/sitemap-pages.xml`, lastmod: now },
     ...Array.from({ length: storyPages }, (_, i) => ({ loc: `${siteUrl}/sitemap-stories/${i + 1}`, lastmod: now })),
     ...Array.from({ length: chapterPages }, (_, i) => ({ loc: `${siteUrl}/sitemap-chapters/${i + 1}`, lastmod: now })),
+    ...Array.from({ length: articlePages }, (_, i) => ({ loc: `${siteUrl}/sitemap-articles/${i + 1}`, lastmod: now })),
     { loc: `${siteUrl}/sitemap-authors.xml`, lastmod: now },
     { loc: `${siteUrl}/sitemap-categories.xml`, lastmod: now },
     { loc: `${siteUrl}/sitemap-tags.xml`, lastmod: now },

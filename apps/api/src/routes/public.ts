@@ -4,7 +4,7 @@ import { prisma } from "@contenthub/database";
 import { loadSeoConfigFromEnv } from "@contenthub/seo";
 import { PostgresSearchProvider } from "@contenthub/search";
 import { NotFoundError, GoneError } from "../errors.js";
-import { serializePublicStory } from "../serializers.js";
+import { serializePublicStory, serializePublicArticle } from "../serializers.js";
 
 const listQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(50).default(20),
@@ -118,6 +118,45 @@ export function registerPublicRoutes(app: FastifyInstance) {
       previousChapter: prev ? { slug: prev.slug, title: prev.title } : null,
       nextChapter: next ? { slug: next.slug, title: next.title } : null,
     };
+  });
+
+  app.get("/public/articles", async (request) => {
+    const query = listQuerySchema.parse(request.query);
+
+    const where = { type: "ARTICLE" as const, status: "PUBLISHED" as const, visibility: "PUBLIC" as const, deletedAt: null };
+
+    const [items, total] = await Promise.all([
+      prisma.content.findMany({
+        where,
+        orderBy: { publishedAt: "desc" },
+        take: query.limit,
+        skip: query.offset,
+        include: { creator: true, article: true },
+      }),
+      prisma.content.count({ where }),
+    ]);
+
+    return {
+      items: items.map((c) => serializePublicArticle(c, siteUrl)),
+      total,
+      limit: query.limit,
+      offset: query.offset,
+    };
+  });
+
+  app.get("/public/articles/:slug", async (request) => {
+    const { slug } = z.object({ slug: z.string() }).parse(request.params);
+
+    const content = await prisma.content.findFirst({
+      where: { slug, type: "ARTICLE" },
+      include: { creator: true, article: true },
+    });
+
+    if (!content) throw new NotFoundError("Article not found");
+    if (content.deletedAt) throw new GoneError("This article has been removed");
+    if (content.status !== "PUBLISHED" || content.visibility !== "PUBLIC") throw new NotFoundError("Article not found");
+
+    return serializePublicArticle(content, siteUrl);
   });
 
   app.get("/public/authors/:slug", async (request) => {

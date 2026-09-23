@@ -7,6 +7,7 @@ import { buildPageMetadata, buildWebPageJsonLd, getRobotsMetadata } from "@conte
 import { getSeoConfig } from "@/lib/seo-config";
 import { getHomepageData } from "@/lib/public-data";
 import { StoryCard } from "@/components/StoryCard";
+import { ArticleCard } from "@/components/ArticleCard";
 import { JsonLd } from "@/components/JsonLd";
 
 export function generateMetadata(): Metadata {
@@ -23,7 +24,7 @@ export function generateMetadata(): Metadata {
 
 export default async function HomePage() {
   const config = getSeoConfig();
-  const { latest, popularCategories, creators } = await getHomepageData();
+  const { latest, latestArticles, popularCategories, creators } = await getHomepageData();
 
   return (
     <main>
@@ -50,6 +51,27 @@ export default async function HomePage() {
                 <StoryCard
                   key={story.id}
                   story={{ slug: story.slug, title: story.title, coverImage: story.coverImage, shortDescription: story.shortDescription, creatorName: story.creator.displayName }}
+                />
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section>
+          <div className="section-head">
+            <h2>Tin tức mới nhất</h2>
+            <Link href="/tin-tuc" className="text-sm">
+              Xem tất cả →
+            </Link>
+          </div>
+          {latestArticles.length === 0 ? (
+            <p className="empty-state">Chưa có tin tức nào.</p>
+          ) : (
+            <div className="card-grid">
+              {latestArticles.map((article) => (
+                <ArticleCard
+                  key={article.id}
+                  article={{ slug: article.slug, title: article.title, coverImage: article.coverImage, shortDescription: article.shortDescription, publishedAt: article.publishedAt, creatorName: article.creator.displayName }}
                 />
               ))}
             </div>

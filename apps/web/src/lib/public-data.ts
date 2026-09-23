@@ -129,12 +129,13 @@ export async function getTagStories(tagId: string) {
 }
 
 export async function getHomepageData() {
-  const [latest, popularCategories, creators] = await Promise.all([
+  const [latest, latestArticles, popularCategories, creators] = await Promise.all([
     prisma.content.findMany({ where: publicStoryWhere, orderBy: { publishedAt: "desc" }, take: 12, include: { creator: true } }),
+    prisma.content.findMany({ where: publicArticleWhere, orderBy: { publishedAt: "desc" }, take: 6, include: { creator: true } }),
     prisma.category.findMany({ where: { deletedAt: null }, take: 8 }),
     prisma.creatorProfile.findMany({ where: { deletedAt: null, contents: { some: publicStoryWhere } }, take: 6 }),
   ]);
-  return { latest, popularCategories, creators };
+  return { latest, latestArticles, popularCategories, creators };
 }
 
 export async function listPublishedStories({ limit = 24, offset = 0, categorySlug, tagSlug }: { limit?: number; offset?: number; categorySlug?: string; tagSlug?: string }) {
@@ -148,4 +149,32 @@ export async function listPublishedStories({ limit = 24, offset = 0, categorySlu
     prisma.content.count({ where }),
   ]);
   return { items, total };
+}
+
+// ── Articles ("tin tức" — daily news) ───────────────────────────────────────
+
+const publicArticleWhere = { type: "ARTICLE" as const, status: "PUBLISHED" as const, visibility: "PUBLIC" as const, deletedAt: null };
+
+export async function getArticleBySlug(slug: string) {
+  return prisma.content.findFirst({
+    where: { slug, type: "ARTICLE" },
+    include: { creator: true, article: true },
+  });
+}
+
+export async function listPublishedArticles({ limit = 24, offset = 0 }: { limit?: number; offset?: number } = {}) {
+  const [items, total] = await Promise.all([
+    prisma.content.findMany({ where: publicArticleWhere, orderBy: { publishedAt: "desc" }, take: limit, skip: offset, include: { creator: true } }),
+    prisma.content.count({ where: publicArticleWhere }),
+  ]);
+  return { items, total };
+}
+
+/** "Tin khác" (more news) — most recent other articles, excluding itself. */
+export async function getRecentArticles(excludeId: string, limit = 6) {
+  return prisma.content.findMany({
+    where: { ...publicArticleWhere, id: { not: excludeId } },
+    orderBy: { publishedAt: "desc" },
+    take: limit,
+  });
 }

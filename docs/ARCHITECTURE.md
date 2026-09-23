@@ -54,8 +54,9 @@ start.
 User
  └── CreatorProfile (1:1, created when a user "becomes a Creator")
       ├── Content (n)              -- polymorphic: type = STORY | ARTICLE | COMIC | VIDEO | AUDIO | PODCAST
-      │    ├── Story (1:1)         -- type-specific extension, only STORY is enabled today
-      │    ├── ContentPart (n)     -- a chapter (STORY), a section/episode for other types later
+      │    ├── Story (1:1)         -- type-specific extension for type=STORY (subtitle, ageRating)
+      │    ├── Article (1:1)       -- type-specific extension for type=ARTICLE ("tin tức" daily news: bodyHtml/bodyJson/wordCount live here directly, no ContentPart — one post, not chapters)
+      │    ├── ContentPart (n)     -- a chapter (STORY today; a section/episode for other types later)
       │    │    └── ContentVersion (n)   -- revision history, one row per save
       │    ├── ContentCategory / ContentTag (n:n)
       │    ├── SeoMetadata (1:1)
@@ -77,14 +78,16 @@ RevenueConfig (versioned) → RevenuePool (one per YYYY-MM) → RevenueTransacti
 the spec is explicit that the system must not be designed "around stories."
 `Content` carries everything every content type needs (title, slug,
 status, visibility, language, publishedAt, creator, categories, tags,
-views, revenue, SEO metadata). `Story` is a narrow 1:1 extension table
-holding only what's STORY-specific (`subtitle`, `ageRating`). Adding
-`ARTICLE` later means: add an `ARTICLE` value to the `ContentType` enum,
-add an `Article` extension table, add an `apps/web` route that renders it,
-and add API endpoints under `/creator/articles`. `ContentPart`,
-`ContentView`, `RevenueTransaction`, `SeoMetadata`, `Comment`, `Like`,
-`Follow` — none of that changes, because they're keyed on `Content`, not on
-`Story`.
+views, revenue, SEO metadata). `Story` and `Article` are narrow 1:1
+extension tables holding only what's type-specific: `Story` has
+`subtitle`/`ageRating`; `Article` has the daily-news post's own
+`bodyHtml`/`bodyJson`/`wordCount`/`readingTimeMinutes` (no `ContentPart` —
+a news post is one unit, not a serialized set of chapters). `ContentView`,
+`RevenueTransaction`, `SeoMetadata`, `Comment`, `Like`, `Follow` — none of
+that changes per type, because they're keyed on `Content`, not on `Story`
+or `Article`. Adding `COMIC`/`VIDEO`/`AUDIO`/`PODCAST` later follows the
+same recipe: a new `ContentType` enum value, a new 1:1 extension table, a
+new `apps/web` route, and API endpoints under `/creator/<type>`.
 
 ## Folder structure
 

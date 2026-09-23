@@ -40,4 +40,12 @@ export const breadcrumbs = {
       { name: `Tag: ${tagName}`, path: paths.tag(tagSlug) },
     ];
   },
+
+  article(articleTitle: string, articleSlug: string): BreadcrumbItem[] {
+    return [
+      { name: "Trang chủ", path: paths.home() },
+      { name: "Tin tức", path: paths.articleList() },
+      { name: articleTitle, path: paths.article(articleSlug) },
+    ];
+  },
 };
