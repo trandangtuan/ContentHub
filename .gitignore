@@ -83,6 +83,9 @@ out
 dist
 .output
 
+# Local file uploads (packages/storage's LocalStorageProvider, apps/api's default UPLOADS_DIR)
+/apps/api/uploads/
+
 # Gatsby files
 .cache/
 # Comment in the public line in if your project uses Gatsby and not Next.js

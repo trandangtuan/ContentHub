@@ -4,7 +4,7 @@ import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Link from "@tiptap/extension-link";
 import Image from "@tiptap/extension-image";
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { countWords, htmlToPlainText, estimateReadingTimeMinutes } from "@contenthub/shared";
 
 export interface EditorStats {
@@ -16,6 +16,8 @@ export interface EditorStats {
 interface EditorProps {
   initialHtml?: string;
   onChange: (stats: EditorStats) => void;
+  /** Uploads the picked file (packages/storage's LocalStorageProvider) and resolves to its URL. Falls back to a plain URL prompt if not given. */
+  onUploadImage?: (file: File) => Promise<string>;
 }
 
 /**
@@ -24,7 +26,9 @@ interface EditorProps {
  * StarterKit + Link/Image extensions. Word count and reading time are
  * derived on every change and handed to the caller, which owns autosave.
  */
-export function Editor({ initialHtml, onChange }: EditorProps) {
+export function Editor({ initialHtml, onChange, onUploadImage }: EditorProps) {
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
   const editor = useEditor({
     extensions: [StarterKit, Link.configure({ openOnClick: false }), Image],
     content: initialHtml ?? "<p></p>",
@@ -77,13 +81,38 @@ export function Editor({ initialHtml, onChange }: EditorProps) {
         </button>
         <button
           type="button"
+          disabled={uploadingImage}
           onClick={() => {
-            const url = window.prompt("Image URL");
-            if (url) editor.chain().focus().setImage({ src: url }).run();
+            if (!onUploadImage) {
+              const url = window.prompt("Image URL");
+              if (url) editor.chain().focus().setImage({ src: url }).run();
+              return;
+            }
+            imageInputRef.current?.click();
           }}
         >
-          Image
+          {uploadingImage ? "Đang tải ảnh..." : "Image"}
         </button>
+        <input
+          ref={imageInputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp,image/gif"
+          style={{ display: "none" }}
+          onChange={async (e) => {
+            const file = e.target.files?.[0];
+            e.target.value = "";
+            if (!file || !onUploadImage) return;
+            setUploadingImage(true);
+            try {
+              const url = await onUploadImage(file);
+              editor.chain().focus().setImage({ src: url }).run();
+            } catch (err) {
+              window.alert(err instanceof Error ? err.message : "Không thể tải ảnh lên");
+            } finally {
+              setUploadingImage(false);
+            }
+          }}
+        />
         <button type="button" onClick={() => editor.chain().focus().setHorizontalRule().run()}>
           Divider
         </button>

@@ -8,6 +8,10 @@ export interface ApiConfig {
   rateLimitWindowMs: number;
   ipHashSecret: string;
   redisUrl: string;
+  /** This API's own externally-reachable origin — used to build absolute upload URLs (uploads/local-provider). Same value as SITE_URL in a same-origin nginx deploy, http://localhost:4000 in local dev. */
+  publicUrl: string;
+  /** Local-disk directory uploads are written to (LocalStorageProvider); mount a persistent volume here in production. */
+  uploadsDir: string;
 }
 
 export function loadApiConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
@@ -26,5 +30,7 @@ export function loadApiConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
     rateLimitWindowMs: Number(env.RATE_LIMIT_WINDOW_MS ?? 60_000),
     ipHashSecret: env.SESSION_SECRET ?? sessionSecret,
     redisUrl: env.REDIS_URL ?? "redis://localhost:6379",
+    publicUrl: (env.API_URL ?? "http://localhost:4000").replace(/\/+$/, ""),
+    uploadsDir: env.UPLOADS_DIR ?? "./uploads",
   };
 }

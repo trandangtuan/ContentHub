@@ -19,6 +19,7 @@ import { getStoryBySlug, getChapter, getAdjacentChapters, getChapterViewCount } 
 import { sanitizeContentHtml } from "@/lib/sanitize";
 import { Breadcrumbs } from "@/components/Breadcrumbs";
 import { JsonLd } from "@/components/JsonLd";
+import { ChapterViewTracker } from "@/components/ChapterViewTracker";
 
 interface Params {
   storySlug: string;
@@ -55,9 +56,11 @@ export async function generateMetadata({ params }: { params: Promise<Params> }):
   }) as Metadata;
 }
 
-// This page is intentionally minimal: no dashboard/editor code, no
+// This page is intentionally minimal: no dashboard/editor code, no heavy
 // analytics/recommendation widgets loaded before the chapter content
-// (docs/SEO.md #7, #33) — just the text, navigation, and structured data.
+// (docs/SEO.md #7, #33) — just the text, navigation, structured data, and
+// ChapterViewTracker (renders nothing; fires one beacon on unload/tab-hide,
+// see docs/REVENUE.md #36-37).
 export default async function ChapterPage({ params }: { params: Promise<Params> }) {
   const { storySlug, chapterSlug } = await params;
   const config = getSeoConfig();
@@ -73,6 +76,7 @@ export default async function ChapterPage({ params }: { params: Promise<Params> 
   return (
     <main className="container">
       <JsonLd data={buildBreadcrumbJsonLd(config, trail)} />
+      <ChapterViewTracker contentId={story.id} contentPartId={chapter.id} />
       <Breadcrumbs items={trail} />
 
       <article>

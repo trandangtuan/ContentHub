@@ -1,6 +1,6 @@
 "use client";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
 export class ApiError extends Error {
   constructor(public readonly status: number, message: string) {
@@ -32,10 +32,49 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+export type UploadPurpose = "cover" | "avatar" | "chapter-image";
+
+export interface UploadResult {
+  key: string;
+  url: string;
+}
+
+/**
+ * Separate from request() because a file upload must NOT get the JSON
+ * Content-Type header — the browser needs to set its own
+ * multipart/form-data boundary when the body is a FormData instance.
+ */
+async function uploadFile(csrfToken: string, purpose: UploadPurpose, file: File, contextSlug?: string): Promise<UploadResult> {
+  const form = new FormData();
+  form.append("file", file);
+  const query = contextSlug ? `?contextSlug=${encodeURIComponent(contextSlug)}` : "";
+
+  const response = await fetch(`${API_URL}/api/v1/creator/uploads/${purpose}${query}`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "x-csrf-token": csrfToken },
+    body: form,
+  });
+
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({ message: response.statusText }));
+    throw new ApiError(response.status, body.message ?? "Upload failed");
+  }
+  return response.json() as Promise<UploadResult>;
+}
+
 export interface CategoryRecord {
   id: string;
   slug: string;
   name: string;
+}
+
+export interface CreatorProfileRecord {
+  id: string;
+  slug: string;
+  displayName: string;
+  bio: string | null;
+  avatarUrl: string | null;
 }
 
 export interface StoryRecord {
@@ -43,6 +82,7 @@ export interface StoryRecord {
   title: string;
   slug: string;
   description: string | null;
+  coverImage?: string | null;
   status: string;
   visibility: string;
   publishedAt: string | null;
@@ -163,7 +203,11 @@ export const api = {
 
   createCreatorProfile: (csrfToken: string, data: { displayName: string; bio?: string }) =>
     request("/api/v1/creator/profile", api.withCsrf(csrfToken, { method: "POST", body: JSON.stringify(data) })),
-  getMyCreatorProfile: () => request("/api/v1/creator/me"),
+  getMyCreatorProfile: () => request<CreatorProfileRecord>("/api/v1/creator/me"),
+  updateMyCreatorProfile: (csrfToken: string, data: { bio?: string; avatarUrl?: string }) =>
+    request<CreatorProfileRecord>("/api/v1/creator/profile", api.withCsrf(csrfToken, { method: "PATCH", body: JSON.stringify(data) })),
+
+  uploadFile,
 
   listCategories: () => request<{ categories: CategoryRecord[] }>("/api/v1/creator/categories"),
   createCategory: (csrfToken: string, name: string) =>

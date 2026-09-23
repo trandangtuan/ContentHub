@@ -10,6 +10,7 @@ const NAV_ITEMS = [
   { href: "/dashboard/analytics", label: "Analytics" },
   { href: "/dashboard/revenue", label: "Doanh thu" },
   { href: "/dashboard/wallet", label: "Ví" },
+  { href: "/dashboard/profile", label: "Hồ sơ" },
 ];
 
 /**

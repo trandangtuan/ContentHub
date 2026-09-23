@@ -60,6 +60,43 @@ describe("POST /api/v1/creator/profile", () => {
   });
 });
 
+describe("PATCH /api/v1/creator/profile", () => {
+  it("updates bio and avatarUrl for the caller's own profile", async () => {
+    const { cookies, csrfToken } = await registerAndBecomeCreator("Bio Update Author");
+
+    const response = await app.inject({
+      method: "PATCH",
+      url: "/api/v1/creator/profile",
+      cookies,
+      headers: { "x-csrf-token": csrfToken },
+      payload: { bio: "Tiểu sử mới", avatarUrl: "https://example.com/avatar.png" },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    expect(body.bio).toBe("Tiểu sử mới");
+    expect(body.avatarUrl).toBe("https://example.com/avatar.png");
+  });
+
+  it("requires a creator profile to exist", async () => {
+    const email = uniqueEmail("no-profile-patch");
+    const register = await app.inject({ method: "POST", url: "/api/v1/auth/register", payload: { email, password: "Password123!", displayName: "No Profile" } });
+    const cookie = register.cookies.find((c) => c.name === "ch_session")!;
+    const cookies = { [cookie.name]: cookie.value };
+    const session = await app.inject({ method: "GET", url: "/api/v1/auth/session", cookies });
+    const csrfToken = session.json().csrfToken as string;
+
+    const response = await app.inject({
+      method: "PATCH",
+      url: "/api/v1/creator/profile",
+      cookies,
+      headers: { "x-csrf-token": csrfToken },
+      payload: { bio: "x" },
+    });
+    expect(response.statusCode).toBe(404);
+  });
+});
+
 describe("Story + chapter lifecycle", () => {
   it("lets a creator draft a story, publish it, add a chapter, and publish the chapter", async () => {
     const { cookies, csrfToken } = await registerAndBecomeCreator("Story Author");
