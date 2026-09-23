@@ -79,7 +79,7 @@ describe("GET /api/v1/public/stories/:storySlug/chapters/:chapterSlug", () => {
     expect(response.statusCode).toBe(200);
     const body = response.json();
     expect(body.bodyHtml).toContain("Hello");
-    expect(body.story.slug).toBe(publicStorySlug);
+    expect(body.item.slug).toBe(publicStorySlug);
     expect(body.author.slug).toBe(creatorSlug);
   });
 

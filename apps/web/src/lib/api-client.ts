@@ -1,5 +1,7 @@
 "use client";
 
+import type { ContentTypeConfig } from "@contenthub/seo";
+
 export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
 
 export class ApiError extends Error {
@@ -11,7 +13,7 @@ export class ApiError extends Error {
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const method = init?.method ?? "GET";
   // Every request declares Content-Type: application/json below, but several
-  // callers (publishStory, unpublishStory, admin reactivateUser/reviewReport/…)
+  // callers (content().publish/unpublish, admin reactivateUser/reviewReport/…)
   // issue a POST with no body. Fastify rejects an empty body sent with a JSON
   // content-type, so default to "{}" for any body-carrying method.
   const needsDefaultBody = init?.body === undefined && method !== "GET" && method !== "HEAD";
@@ -77,19 +79,8 @@ export interface CreatorProfileRecord {
   avatarUrl: string | null;
 }
 
-export interface StoryRecord {
-  id: string;
-  title: string;
-  slug: string;
-  description: string | null;
-  coverImage?: string | null;
-  status: string;
-  visibility: string;
-  publishedAt: string | null;
-  categories?: { category: CategoryRecord }[];
-}
-
-export interface ArticleRecord {
+/** Generic across every ContentType (packages/seo's registry). A "single" partsMode type's sole body lives at `parts[0]`. */
+export interface ContentItemRecord {
   id: string;
   title: string;
   slug: string;
@@ -99,10 +90,14 @@ export interface ArticleRecord {
   status: string;
   visibility: string;
   publishedAt: string | null;
-  article: { bodyHtml: string | null; wordCount: number; readingTimeMinutes: number } | null;
+  attributes?: Record<string, unknown> | null;
+  categories?: { category: CategoryRecord }[];
+  parts?: PartRecord[];
+  _count?: { parts: number };
 }
 
-export interface ChapterRecord {
+/** A "multi" partsMode type's chapter, or a "single" type's sole body-holding part. */
+export interface PartRecord {
   id: string;
   title: string;
   slug: string;
@@ -226,35 +221,38 @@ export const api = {
   createCategory: (csrfToken: string, name: string) =>
     request<CategoryRecord>("/api/v1/creator/categories", api.withCsrf(csrfToken, { method: "POST", body: JSON.stringify({ name }) })),
 
-  listMyStories: () => request<{ stories: StoryRecord[] }>("/api/v1/creator/stories"),
-  getStory: (id: string) => request<StoryRecord>(`/api/v1/creator/stories/${id}`),
-  createStory: (csrfToken: string, data: Record<string, unknown>) =>
-    request<StoryRecord>("/api/v1/creator/stories", api.withCsrf(csrfToken, { method: "POST", body: JSON.stringify(data) })),
-  updateStory: (csrfToken: string, id: string, data: Record<string, unknown>) =>
-    request<StoryRecord>(`/api/v1/creator/stories/${id}`, api.withCsrf(csrfToken, { method: "PATCH", body: JSON.stringify(data) })),
-  publishStory: (csrfToken: string, id: string) => request(`/api/v1/creator/stories/${id}/publish`, api.withCsrf(csrfToken, { method: "POST" })),
-  unpublishStory: (csrfToken: string, id: string) => request(`/api/v1/creator/stories/${id}/unpublish`, api.withCsrf(csrfToken, { method: "POST" })),
+  /**
+   * One factory bound to a ContentType's registry config (packages/seo) —
+   * every dashboard/[section] page calls the same methods regardless of
+   * type. A new type needs no new client methods, only a registry entry.
+   */
+  content(config: ContentTypeConfig) {
+    const base = `/api/v1/creator/${config.apiResource}`;
+    const partsBase = config.partsApiResource ? `/api/v1/creator/${config.partsApiResource}` : undefined;
 
-  listChapters: (storyId: string) => request<{ chapters: ChapterRecord[] }>(`/api/v1/creator/stories/${storyId}/chapters`),
-  getChapter: (chapterId: string) => request<ChapterRecord>(`/api/v1/creator/chapters/${chapterId}`),
-  createChapter: (csrfToken: string, storyId: string, data: Record<string, unknown>) =>
-    request<ChapterRecord>(`/api/v1/creator/stories/${storyId}/chapters`, api.withCsrf(csrfToken, { method: "POST", body: JSON.stringify(data) })),
-  updateChapter: (csrfToken: string, chapterId: string, data: Record<string, unknown>) =>
-    request<ChapterRecord>(`/api/v1/creator/chapters/${chapterId}`, api.withCsrf(csrfToken, { method: "PATCH", body: JSON.stringify(data) })),
-  publishChapter: (csrfToken: string, chapterId: string, scheduledAt?: string) =>
-    request(`/api/v1/creator/chapters/${chapterId}/publish`, api.withCsrf(csrfToken, { method: "POST", body: JSON.stringify({ scheduledAt }) })),
-  deleteChapter: (csrfToken: string, chapterId: string) =>
-    request<void>(`/api/v1/creator/chapters/${chapterId}`, api.withCsrf(csrfToken, { method: "DELETE" })),
+    return {
+      list: () => request<Record<string, ContentItemRecord[]>>(base).then((r) => r[config.apiResource]!),
+      get: (id: string) => request<ContentItemRecord>(`${base}/${id}`),
+      create: (csrfToken: string, data: Record<string, unknown>) => request<ContentItemRecord>(base, api.withCsrf(csrfToken, { method: "POST", body: JSON.stringify(data) })),
+      update: (csrfToken: string, id: string, data: Record<string, unknown>) =>
+        request<ContentItemRecord>(`${base}/${id}`, api.withCsrf(csrfToken, { method: "PATCH", body: JSON.stringify(data) })),
+      publish: (csrfToken: string, id: string) => request<ContentItemRecord>(`${base}/${id}/publish`, api.withCsrf(csrfToken, { method: "POST" })),
+      unpublish: (csrfToken: string, id: string) => request<ContentItemRecord>(`${base}/${id}/unpublish`, api.withCsrf(csrfToken, { method: "POST" })),
+      delete: (csrfToken: string, id: string) => request<void>(`${base}/${id}`, api.withCsrf(csrfToken, { method: "DELETE" })),
 
-  listMyArticles: () => request<{ articles: ArticleRecord[] }>("/api/v1/creator/articles"),
-  getArticle: (id: string) => request<ArticleRecord>(`/api/v1/creator/articles/${id}`),
-  createArticle: (csrfToken: string, data: Record<string, unknown>) =>
-    request<ArticleRecord>("/api/v1/creator/articles", api.withCsrf(csrfToken, { method: "POST", body: JSON.stringify(data) })),
-  updateArticle: (csrfToken: string, id: string, data: Record<string, unknown>) =>
-    request<ArticleRecord>(`/api/v1/creator/articles/${id}`, api.withCsrf(csrfToken, { method: "PATCH", body: JSON.stringify(data) })),
-  publishArticle: (csrfToken: string, id: string) => request<ArticleRecord>(`/api/v1/creator/articles/${id}/publish`, api.withCsrf(csrfToken, { method: "POST" })),
-  unpublishArticle: (csrfToken: string, id: string) => request<ArticleRecord>(`/api/v1/creator/articles/${id}/unpublish`, api.withCsrf(csrfToken, { method: "POST" })),
-  deleteArticle: (csrfToken: string, id: string) => request<void>(`/api/v1/creator/articles/${id}`, api.withCsrf(csrfToken, { method: "DELETE" })),
+      // Only meaningful for a "multi" partsMode type.
+      listParts: (itemId: string) => request<Record<string, PartRecord[]>>(`${base}/${itemId}/${config.partsApiResource}`).then((r) => r[config.partsApiResource!]!),
+      getPart: (partId: string) => request<PartRecord>(`${partsBase}/${partId}`),
+      createPart: (csrfToken: string, itemId: string, data: Record<string, unknown>) =>
+        request<PartRecord>(`${base}/${itemId}/${config.partsApiResource}`, api.withCsrf(csrfToken, { method: "POST", body: JSON.stringify(data) })),
+      updatePart: (csrfToken: string, partId: string, data: Record<string, unknown>) =>
+        request<PartRecord>(`${partsBase}/${partId}`, api.withCsrf(csrfToken, { method: "PATCH", body: JSON.stringify(data) })),
+      publishPart: (csrfToken: string, partId: string, scheduledAt?: string) =>
+        request<PartRecord>(`${partsBase}/${partId}/publish`, api.withCsrf(csrfToken, { method: "POST", body: JSON.stringify({ scheduledAt }) })),
+      unpublishPart: (csrfToken: string, partId: string) => request<PartRecord>(`${partsBase}/${partId}/unpublish`, api.withCsrf(csrfToken, { method: "POST" })),
+      deletePart: (csrfToken: string, partId: string) => request<void>(`${partsBase}/${partId}`, api.withCsrf(csrfToken, { method: "DELETE" })),
+    };
+  },
 
   getWallet: () => request("/api/v1/creator/wallet"),
   getAnalytics: () => request("/api/v1/creator/analytics"),

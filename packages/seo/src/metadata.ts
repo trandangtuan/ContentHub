@@ -8,30 +8,31 @@ const MAX_DESCRIPTION_LENGTH = 160;
 
 /** Title templates (docs/SEO.md #12). Keep them short — never let a long user title blow the budget silently. */
 export const titleTemplates = {
-  story: (storyTitle: string, siteName: string) => truncateText(`${storyTitle} – ${siteName}`, MAX_TITLE_LENGTH + 20),
-  chapter: (chapterTitle: string, storyTitle: string, siteName: string) =>
-    truncateText(`${chapterTitle} – ${storyTitle} – ${siteName}`, MAX_TITLE_LENGTH + 30),
+  /** Generic for any ContentType's detail page. */
+  item: (itemTitle: string, siteName: string) => truncateText(`${itemTitle} – ${siteName}`, MAX_TITLE_LENGTH + 20),
+  /** Generic for a "multi" type's part (chapter) page. */
+  part: (partTitle: string, itemTitle: string, siteName: string) =>
+    truncateText(`${partTitle} – ${itemTitle} – ${siteName}`, MAX_TITLE_LENGTH + 30),
   author: (authorName: string, siteName: string) =>
     truncateText(`${authorName} – Truyện và tác phẩm – ${siteName}`, MAX_TITLE_LENGTH + 30),
   category: (categoryName: string, siteName: string) => truncateText(`${categoryName} – ${siteName}`, MAX_TITLE_LENGTH + 20),
   tag: (tagName: string, siteName: string) => truncateText(`Tag: ${tagName} – ${siteName}`, MAX_TITLE_LENGTH + 20),
-  article: (articleTitle: string, siteName: string) => truncateText(`${articleTitle} – ${siteName}`, MAX_TITLE_LENGTH + 20),
 };
 
-/** Story meta description: the creator's description, truncated at a word boundary — never the raw content body. */
-export function buildStoryDescription(description: string | null | undefined, shortDescription: string | null | undefined): string {
+/** Item meta description: the creator's description, truncated at a word boundary — never the raw content body. */
+export function buildItemDescription(description: string | null | undefined, shortDescription: string | null | undefined): string {
   const source = (description?.trim() || shortDescription?.trim() || "").trim();
   if (!source) return "";
   return truncateText(source, MAX_DESCRIPTION_LENGTH);
 }
 
 /**
- * Chapter meta description: chapter title + story title + a short excerpt —
- * never the full chapter body (docs/SEO.md #13).
+ * Part (chapter) meta description: part title + item title + a short excerpt
+ * — never the full body (docs/SEO.md #13).
  */
-export function buildChapterDescription(chapterTitle: string, storyTitle: string, excerptPlainText: string): string {
+export function buildPartDescription(partTitle: string, itemTitle: string, excerptPlainText: string): string {
   const excerpt = truncateText(excerptPlainText.trim(), 90);
-  const base = `${chapterTitle} - ${storyTitle}`;
+  const base = `${partTitle} - ${itemTitle}`;
   return truncateText(excerpt ? `${base}: ${excerpt}` : base, MAX_DESCRIPTION_LENGTH);
 }
 

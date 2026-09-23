@@ -1,9 +1,8 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { prisma } from "@contenthub/database";
-import { slugify, disambiguateSlug, countWords, estimateReadingTimeMinutes, htmlToPlainText } from "@contenthub/shared";
-import { buildSlugChangeRedirect } from "@contenthub/seo";
-import { ForbiddenError, NotFoundError, ConflictError, ValidationError } from "../errors.js";
+import { slugify, disambiguateSlug } from "@contenthub/shared";
+import { ConflictError, NotFoundError } from "../errors.js";
 
 const createProfileSchema = z.object({
   displayName: z.string().min(1).max(100),
@@ -15,39 +14,8 @@ const updateProfileSchema = z.object({
   avatarUrl: z.string().url().optional(),
 });
 
-const createStorySchema = z.object({
-  title: z.string().min(1).max(200),
-  subtitle: z.string().max(200).optional(),
-  description: z.string().max(5000).optional(),
-  shortDescription: z.string().max(300).optional(),
-  language: z.string().min(2).max(10).default("vi"),
-  ageRating: z.string().max(10).optional(),
-  categoryIds: z.array(z.string().uuid()).max(5).optional(),
-  coverImage: z.string().url().optional(),
-});
-
-const updateStorySchema = createStorySchema.partial().extend({
-  visibility: z.enum(["PUBLIC", "PRIVATE", "UNLISTED"]).optional(),
-});
-
 const createCategorySchema = z.object({
   name: z.string().min(1).max(50),
-});
-
-const createChapterSchema = z.object({
-  title: z.string().min(1).max(200),
-  bodyHtml: z.string().max(500_000).default(""),
-  bodyJson: z.unknown().optional(),
-});
-
-const updateChapterSchema = z.object({
-  title: z.string().min(1).max(200).optional(),
-  bodyHtml: z.string().max(500_000).optional(),
-  bodyJson: z.unknown().optional(),
-});
-
-const publishChapterSchema = z.object({
-  scheduledAt: z.string().datetime().optional(),
 });
 
 async function uniqueSlug(baseTitle: string, check: (slug: string) => Promise<boolean>): Promise<string> {
@@ -59,21 +27,12 @@ async function uniqueSlug(baseTitle: string, check: (slug: string) => Promise<bo
   throw new ConflictError("Could not generate a unique slug");
 }
 
-async function requireOwnedStory(userSession: { userId: string; creatorProfileId: string | null; role: string }, storyId: string) {
-  const content = await prisma.content.findUnique({ where: { id: storyId }, include: { story: true, categories: { include: { category: true } } } });
-  if (!content || content.deletedAt) throw new NotFoundError("Story not found");
-  const isOwner = userSession.creatorProfileId === content.creatorId;
-  const isPrivileged = userSession.role === "ADMIN" || userSession.role === "MODERATOR";
-  if (!isOwner && !isPrivileged) throw new ForbiddenError();
-  return content;
-}
-
-async function requireExistingCategories(categoryIds: string[]) {
-  if (categoryIds.length === 0) return;
-  const found = await prisma.category.findMany({ where: { id: { in: categoryIds }, deletedAt: null } });
-  if (found.length !== categoryIds.length) throw new ValidationError("One or more categories do not exist");
-}
-
+/**
+ * Routes that aren't specific to any one ContentType: profile, the shared
+ * category taxonomy, cross-type analytics/wallet. Per-type CRUD (stories,
+ * articles, their chapters) lives in routes/content.ts, registered once per
+ * packages/seo content-type registry entry.
+ */
 export function registerCreatorRoutes(app: FastifyInstance) {
   // ── Creator profile ──────────────────────────────────────────────────
   app.post("/creator/profile", async (request, reply) => {
@@ -135,290 +94,19 @@ export function registerCreatorRoutes(app: FastifyInstance) {
     reply.status(201).send(category);
   });
 
-  // ── Stories ───────────────────────────────────────────────────────────
-  app.get("/creator/stories", async (request) => {
-    const session = app.requireAuth(request);
-    if (!session.creatorProfileId) return { stories: [] };
-
-    const stories = await prisma.content.findMany({
-      where: { creatorId: session.creatorProfileId, deletedAt: null },
-      orderBy: { updatedAt: "desc" },
-      include: { story: true, categories: { include: { category: true } }, _count: { select: { parts: true } } },
-    });
-
-    return { stories };
-  });
-
-  app.get("/creator/stories/:id", async (request) => {
-    const session = app.requireAuth(request);
-    const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
-    const content = await requireOwnedStory(session, id);
-    return content;
-  });
-
-  app.get("/creator/stories/:id/chapters", async (request) => {
-    const session = app.requireAuth(request);
-    const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
-    await requireOwnedStory(session, id);
-
-    const chapters = await prisma.contentPart.findMany({ where: { contentId: id, deletedAt: null }, orderBy: { position: "asc" } });
-    return { chapters };
-  });
-
-  app.get("/creator/chapters/:id", async (request) => {
-    const session = app.requireAuth(request);
-    const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
-
-    const part = await prisma.contentPart.findUnique({ where: { id } });
-    if (!part || part.deletedAt) throw new NotFoundError("Chapter not found");
-    await requireOwnedStory(session, part.contentId);
-
-    return part;
-  });
-
-  app.post("/creator/stories", async (request, reply) => {
-    const session = app.requireRole(request, "CREATOR");
-    app.requireCsrf(request);
-    if (!session.creatorProfileId) throw new ForbiddenError("Create a creator profile first");
-
-    const body = createStorySchema.parse(request.body);
-    await requireExistingCategories(body.categoryIds ?? []);
-    const slug = await uniqueSlug(body.title, async (candidate) => !(await prisma.content.findUnique({ where: { slug: candidate } })));
-
-    const content = await prisma.content.create({
-      data: {
-        creatorId: session.creatorProfileId,
-        type: "STORY",
-        title: body.title,
-        slug,
-        description: body.description,
-        shortDescription: body.shortDescription,
-        coverImage: body.coverImage,
-        language: body.language,
-        status: "DRAFT",
-        visibility: "PRIVATE",
-        story: { create: { subtitle: body.subtitle, ageRating: body.ageRating } },
-        categories: body.categoryIds ? { create: body.categoryIds.map((categoryId) => ({ categoryId })) } : undefined,
-      },
-      include: { story: true, categories: { include: { category: true } } },
-    });
-
-    reply.status(201).send(content);
-  });
-
-  app.patch("/creator/stories/:id", async (request) => {
-    const session = app.requireAuth(request);
-    app.requireCsrf(request);
-    const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
-    const content = await requireOwnedStory(session, id);
-    const body = updateStorySchema.parse(request.body);
-    if (body.categoryIds) await requireExistingCategories(body.categoryIds);
-
-    let newSlug: string | undefined;
-    if (body.title && body.title !== content.title) {
-      newSlug = await uniqueSlug(body.title, async (candidate) => !(await prisma.content.findUnique({ where: { slug: candidate } })));
-    }
-
-    const updated = await prisma.$transaction(async (tx) => {
-      if (newSlug) {
-        await tx.redirect.create({ data: buildSlugChangeRedirect(`/truyen/${content.slug}`, `/truyen/${newSlug}`) });
-      }
-      if (body.categoryIds) {
-        await tx.contentCategory.deleteMany({ where: { contentId: id } });
-      }
-      return tx.content.update({
-        where: { id },
-        data: {
-          title: body.title,
-          slug: newSlug,
-          description: body.description,
-          shortDescription: body.shortDescription,
-          language: body.language,
-          coverImage: body.coverImage,
-          visibility: body.visibility,
-          story: body.subtitle || body.ageRating ? { update: { subtitle: body.subtitle, ageRating: body.ageRating } } : undefined,
-          categories: body.categoryIds ? { create: body.categoryIds.map((categoryId) => ({ categoryId })) } : undefined,
-        },
-        include: { story: true, categories: { include: { category: true } } },
-      });
-    });
-
-    return updated;
-  });
-
-  app.post("/creator/stories/:id/publish", async (request) => {
-    const session = app.requireAuth(request);
-    app.requireCsrf(request);
-    const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
-    const content = await requireOwnedStory(session, id);
-
-    if (!content.title || !content.description) {
-      throw new ValidationError("Title and description are required before publishing");
-    }
-
-    return prisma.content.update({
-      where: { id },
-      data: { status: "PUBLISHED", visibility: "PUBLIC", publishedAt: content.publishedAt ?? new Date() },
-    });
-  });
-
-  app.post("/creator/stories/:id/unpublish", async (request) => {
-    const session = app.requireAuth(request);
-    app.requireCsrf(request);
-    const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
-    await requireOwnedStory(session, id);
-
-    return prisma.content.update({ where: { id }, data: { status: "UNPUBLISHED" } });
-  });
-
-  // ── Chapters (ContentPart) ──────────────────────────────────────────────
-  app.post("/creator/stories/:id/chapters", async (request, reply) => {
-    const session = app.requireAuth(request);
-    app.requireCsrf(request);
-    const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
-    await requireOwnedStory(session, id);
-
-    const body = createChapterSchema.parse(request.body);
-    const plainText = htmlToPlainText(body.bodyHtml);
-    const wordCount = countWords(plainText);
-
-    const slug = await uniqueSlug(body.title, async (candidate) => !(await prisma.contentPart.findUnique({ where: { contentId_slug: { contentId: id, slug: candidate } } })));
-    const maxPosition = await prisma.contentPart.aggregate({ where: { contentId: id }, _max: { position: true } });
-
-    const part = await prisma.$transaction(async (tx) => {
-      const created = await tx.contentPart.create({
-        data: {
-          contentId: id,
-          title: body.title,
-          slug,
-          position: (maxPosition._max.position ?? 0) + 1,
-          bodyHtml: body.bodyHtml,
-          bodyJson: body.bodyJson as never,
-          wordCount,
-          readingTimeMinutes: estimateReadingTimeMinutes(wordCount),
-          status: "DRAFT",
-        },
-      });
-
-      // Seed revision 1 so every saved state (including the first) is in the history.
-      await tx.contentVersion.create({
-        data: {
-          contentPartId: created.id,
-          versionNumber: 1,
-          bodyHtml: created.bodyHtml,
-          bodyJson: created.bodyJson as never,
-          wordCount: created.wordCount,
-          createdById: session.userId,
-        },
-      });
-
-      return created;
-    });
-
-    reply.status(201).send(part);
-  });
-
-  app.patch("/creator/chapters/:id", async (request) => {
-    const session = app.requireAuth(request);
-    app.requireCsrf(request);
-    const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
-
-    const part = await prisma.contentPart.findUnique({ where: { id } });
-    if (!part || part.deletedAt) throw new NotFoundError("Chapter not found");
-    await requireOwnedStory(session, part.contentId);
-
-    const body = updateChapterSchema.parse(request.body);
-    const wordCount = body.bodyHtml !== undefined ? countWords(htmlToPlainText(body.bodyHtml)) : undefined;
-
-    return prisma.$transaction(async (tx) => {
-      const updated = await tx.contentPart.update({
-        where: { id },
-        data: {
-          title: body.title,
-          bodyHtml: body.bodyHtml,
-          bodyJson: body.bodyJson as never,
-          wordCount,
-          readingTimeMinutes: wordCount !== undefined ? estimateReadingTimeMinutes(wordCount) : undefined,
-        },
-      });
-
-      // Revision history (autosave -> content_versions), per docs/ARCHITECTURE.md editor spec.
-      if (body.bodyHtml !== undefined) {
-        const lastVersion = await tx.contentVersion.aggregate({ where: { contentPartId: id }, _max: { versionNumber: true } });
-        await tx.contentVersion.create({
-          data: {
-            contentPartId: id,
-            versionNumber: (lastVersion._max.versionNumber ?? 0) + 1,
-            bodyHtml: updated.bodyHtml,
-            bodyJson: updated.bodyJson as never,
-            wordCount: updated.wordCount,
-            createdById: session.userId,
-          },
-        });
-      }
-
-      return updated;
-    });
-  });
-
-  app.post("/creator/chapters/:id/publish", async (request) => {
-    const session = app.requireAuth(request);
-    app.requireCsrf(request);
-    const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
-    const body = publishChapterSchema.parse(request.body ?? {});
-
-    const part = await prisma.contentPart.findUnique({ where: { id } });
-    if (!part || part.deletedAt) throw new NotFoundError("Chapter not found");
-    await requireOwnedStory(session, part.contentId);
-
-    if (body.scheduledAt) {
-      // Data model + status only — flipping SCHEDULED -> PUBLISHED at the target
-      // time is a worker responsibility (docs/ARCHITECTURE.md, Phase 5+ backlog).
-      return prisma.contentPart.update({ where: { id }, data: { status: "SCHEDULED", scheduledAt: new Date(body.scheduledAt) } });
-    }
-
-    return prisma.contentPart.update({ where: { id }, data: { status: "PUBLISHED", publishedAt: new Date() } });
-  });
-
-  app.post("/creator/chapters/:id/unpublish", async (request) => {
-    const session = app.requireAuth(request);
-    app.requireCsrf(request);
-    const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
-
-    const part = await prisma.contentPart.findUnique({ where: { id } });
-    if (!part || part.deletedAt) throw new NotFoundError("Chapter not found");
-    await requireOwnedStory(session, part.contentId);
-
-    return prisma.contentPart.update({ where: { id }, data: { status: "UNPUBLISHED" } });
-  });
-
-  app.delete("/creator/chapters/:id", async (request, reply) => {
-    const session = app.requireAuth(request);
-    app.requireCsrf(request);
-    const { id } = z.object({ id: z.string().uuid() }).parse(request.params);
-
-    const part = await prisma.contentPart.findUnique({ where: { id } });
-    if (!part || part.deletedAt) throw new NotFoundError("Chapter not found");
-    await requireOwnedStory(session, part.contentId);
-
-    // Soft delete (matches the Content-level pattern in packages/moderation):
-    // unpublish first so it drops out of the public reader/sitemap immediately,
-    // deletedAt keeps it out of every creator-facing list/query going forward.
-    await prisma.contentPart.update({ where: { id }, data: { deletedAt: new Date(), status: "UNPUBLISHED" } });
-    reply.status(204).send();
-  });
-
   // ── Analytics / wallet (read-only; all figures computed server-side) ───
+  // Cross-type on purpose: a creator's total reach spans every ContentType
+  // they've published (stories AND articles), not just one.
   app.get("/creator/analytics", async (request) => {
     const session = app.requireAuth(request);
     if (!session.creatorProfileId) throw new NotFoundError("No creator profile yet");
 
-    const stories = await prisma.content.findMany({ where: { creatorId: session.creatorProfileId, deletedAt: null }, select: { id: true, title: true, slug: true } });
-    const storyIds = stories.map((s) => s.id);
+    const items = await prisma.content.findMany({ where: { creatorId: session.creatorProfileId, deletedAt: null }, select: { id: true, title: true, slug: true, type: true } });
+    const itemIds = items.map((i) => i.id);
 
     const views = await prisma.contentView.groupBy({
       by: ["contentId"],
-      where: { contentId: { in: storyIds } },
+      where: { contentId: { in: itemIds } },
       _sum: { rawViews: true, validViews: true, qualifiedViews: true, monetizedViews: true },
     });
 
@@ -426,12 +114,13 @@ export function registerCreatorRoutes(app: FastifyInstance) {
 
     return {
       followerCount,
-      stories: stories.map((story) => {
-        const v = views.find((row) => row.contentId === story.id);
+      items: items.map((item) => {
+        const v = views.find((row) => row.contentId === item.id);
         return {
-          id: story.id,
-          title: story.title,
-          slug: story.slug,
+          id: item.id,
+          title: item.title,
+          slug: item.slug,
+          type: item.type,
           rawViews: v?._sum.rawViews ?? 0,
           qualifiedViews: v?._sum.qualifiedViews ?? 0,
           monetizedViews: v?._sum.monetizedViews ?? 0,

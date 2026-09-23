@@ -4,12 +4,12 @@ export const dynamic = "force-dynamic";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Image from "next/image";
-import { buildPageMetadata, buildPersonOrOrganizationJsonLd, buildBreadcrumbJsonLd, breadcrumbs, getRobotsMetadata, titleTemplates, paths } from "@contenthub/seo";
+import { buildPageMetadata, buildPersonOrOrganizationJsonLd, buildBreadcrumbJsonLd, breadcrumbs, getRobotsMetadata, titleTemplates, paths, contentTypeByKey } from "@contenthub/seo";
 import { getSeoConfig } from "@/lib/seo-config";
-import { getAuthorBySlug, getAuthorStories } from "@/lib/public-data";
+import { getAuthorBySlug, getAuthorItems } from "@/lib/public-data";
 import { Breadcrumbs } from "@/components/Breadcrumbs";
 import { JsonLd } from "@/components/JsonLd";
-import { StoryCard } from "@/components/StoryCard";
+import { ContentCard } from "@/components/ContentCard";
 
 interface Params {
   creatorSlug: string;
@@ -37,7 +37,7 @@ export default async function AuthorPage({ params }: { params: Promise<Params> }
   const creator = await getAuthorBySlug(creatorSlug);
   if (!creator) notFound();
 
-  const stories = await getAuthorStories(creator.id);
+  const items = await getAuthorItems(creator.id);
   const trail = breadcrumbs.author(creator.displayName, creator.slug);
 
   return (
@@ -69,14 +69,16 @@ export default async function AuthorPage({ params }: { params: Promise<Params> }
       </header>
 
       <section>
-        <h2>Truyện đã xuất bản ({stories.length})</h2>
-        {stories.length === 0 ? (
-          <p className="empty-state">Tác giả chưa xuất bản truyện nào.</p>
+        <h2>Đã xuất bản ({items.length})</h2>
+        {items.length === 0 ? (
+          <p className="empty-state">Tác giả chưa xuất bản nội dung nào.</p>
         ) : (
           <div className="card-grid">
-            {stories.map((story) => (
-              <StoryCard key={story.id} story={{ slug: story.slug, title: story.title, coverImage: story.coverImage, shortDescription: story.shortDescription }} />
-            ))}
+            {items.map((item) => {
+              const typeConfig = contentTypeByKey(item.type);
+              if (!typeConfig) return null;
+              return <ContentCard key={item.id} config={typeConfig} item={{ slug: item.slug, title: item.title, coverImage: item.coverImage, shortDescription: item.shortDescription }} />;
+            })}
           </div>
         )}
       </section>

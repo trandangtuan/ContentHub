@@ -9,7 +9,7 @@ tables holding content or money-adjacent state also have `deleted_at`
 ## ERD (core tables)
 
 ```
-users ──1:1── creator_profiles ──1:n── contents ──1:1── stories
+users ──1:1── creator_profiles ──1:n── contents
   │                  │                    │
   │                  │                    ├─1:n─ content_parts ──1:n─ content_versions
   │                  │                    ├─n:n─ content_categories ─ categories
@@ -41,11 +41,16 @@ role. `creator_profiles` is a separate 1:1 table rather than fields on
 check, and so an `Organization`-type creator (`is_organization`) doesn't
 need a second user-like concept.
 
-### `contents` / `stories` / `content_parts` / `content_versions`
-See docs/ARCHITECTURE.md for why `contents` is the polymorphic core.
-`content_parts.slug` is unique per `(content_id, slug)`, not globally — two
-different stories can both have a `chuong-1`. `content_versions` is an
-append-only revision log: every save (including the chapter's first save)
+### `contents` / `content_parts` / `content_versions`
+See docs/ARCHITECTURE.md for why `contents` is the polymorphic core, and
+for how `content_parts` (not a per-`ContentType` table) holds every type's
+body. `contents.attributes` (`jsonb`) holds type-specific scalar metadata
+(e.g. a story's `{subtitle, ageRating}`) — a new `ContentType` with only
+scalar fields needs no new table. `content_parts.slug` is unique per
+`(content_id, slug)`, not globally — two different stories can both have a
+`chuong-1` (a "single" `partsMode` type's one part always uses the fixed
+slug `"content"`, never rendered in a URL). `content_versions` is an
+append-only revision log: every save (including a part's first save)
 writes one row, `created_by_id` records who. `contents.search_vector` is a
 generated/trigger-maintained `tsvector` (migration
 `20260921063600_search_vector_trigger`) — see docs/SEO.md's search
@@ -110,7 +115,7 @@ handler.
 
 ## Soft delete policy
 
-`deleted_at` exists on: `users`, `creator_profiles`, `contents`, `stories`,
+`deleted_at` exists on: `users`, `creator_profiles`, `contents`,
 `content_parts`, `categories`, `tags`, `comments`, `payout_accounts`.
 Nothing user-generated is ever hard-deleted from these tables (spec §3) —
 a "delete" moderation action sets `deleted_at` and moves `contents.status`

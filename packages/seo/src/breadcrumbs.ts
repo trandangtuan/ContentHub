@@ -1,21 +1,21 @@
 import { paths } from "./canonical";
 import type { BreadcrumbItem } from "./jsonld";
+import type { ContentTypeConfig } from "./content-types";
 
 /** Breadcrumb trails (docs/SEO.md #16, #28) shared by the JSON-LD builder and the rendered <nav> breadcrumb. */
 export const breadcrumbs = {
-  story(storyTitle: string, storySlug: string): BreadcrumbItem[] {
+  /** Generic for any ContentType: Trang chủ -> {section label} -> {item title}. */
+  item(config: ContentTypeConfig, itemTitle: string, itemSlug: string): BreadcrumbItem[] {
     return [
       { name: "Trang chủ", path: paths.home() },
-      { name: "Truyện", path: paths.storyList() },
-      { name: storyTitle, path: paths.story(storySlug) },
+      { name: config.label, path: paths.section(config.urlPrefix) },
+      { name: itemTitle, path: paths.item(config.urlPrefix, itemSlug) },
     ];
   },
 
-  chapter(storyTitle: string, storySlug: string, chapterTitle: string, chapterSlug: string): BreadcrumbItem[] {
-    return [
-      ...breadcrumbs.story(storyTitle, storySlug),
-      { name: chapterTitle, path: paths.chapter(storySlug, chapterSlug) },
-    ];
+  /** Adds a part (chapter) crumb — only meaningful for a "multi" type. */
+  part(config: ContentTypeConfig, itemTitle: string, itemSlug: string, partTitle: string, partSlug: string): BreadcrumbItem[] {
+    return [...breadcrumbs.item(config, itemTitle, itemSlug), { name: partTitle, path: paths.part(config.urlPrefix, itemSlug, partSlug) }];
   },
 
   author(authorName: string, authorSlug: string): BreadcrumbItem[] {
@@ -38,14 +38,6 @@ export const breadcrumbs = {
     return [
       { name: "Trang chủ", path: paths.home() },
       { name: `Tag: ${tagName}`, path: paths.tag(tagSlug) },
-    ];
-  },
-
-  article(articleTitle: string, articleSlug: string): BreadcrumbItem[] {
-    return [
-      { name: "Trang chủ", path: paths.home() },
-      { name: "Tin tức", path: paths.articleList() },
-      { name: articleTitle, path: paths.article(articleSlug) },
     ];
   },
 };

@@ -78,6 +78,25 @@ export function buildNewsArticleJsonLd(config: SeoConfig, input: ArticleJsonLdIn
   };
 }
 
+export interface ContentJsonLdInput {
+  title: string;
+  description: string;
+  image?: string;
+  authorName: string;
+  authorUrl: string;
+  inLanguage: string;
+  datePublished?: string;
+  dateModified?: string;
+}
+
+/** Dispatches to the right schema.org shape for a ContentType (its registry's `jsonLd` field) — the generic detail page never picks Book vs NewsArticle itself. */
+export function buildContentJsonLd(config: SeoConfig, kind: "book" | "newsArticle", input: ContentJsonLdInput) {
+  if (kind === "newsArticle") {
+    return buildNewsArticleJsonLd(config, { headline: input.title, ...input });
+  }
+  return buildBookJsonLd(config, { name: input.title, ...input });
+}
+
 export interface PersonJsonLdInput {
   name: string;
   url: string;

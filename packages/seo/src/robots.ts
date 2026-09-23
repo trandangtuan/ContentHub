@@ -1,4 +1,5 @@
 import type { SeoConfig } from "./config";
+import { CONTENT_TYPES } from "./content-types";
 
 export interface RobotsDirective {
   index: boolean;
@@ -61,11 +62,10 @@ export interface RobotsTxtOptions {
 export function buildRobotsTxt(config: SeoConfig, options: RobotsTxtOptions = {}): string {
   const lines: string[] = [
     "User-agent: *",
-    "Allow: /truyen/",
+    ...CONTENT_TYPES.map((c) => `Allow: /${c.urlPrefix}/`),
     "Allow: /tac-gia/",
     "Allow: /the-loai/",
     "Allow: /tag/",
-    "Allow: /tin-tuc/",
     "Disallow: /dashboard/",
     "Disallow: /api/",
     "Disallow: /admin/",

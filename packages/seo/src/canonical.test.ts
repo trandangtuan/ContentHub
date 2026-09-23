@@ -4,13 +4,14 @@ import { buildCanonicalUrl, paths } from "./canonical";
 const config = { siteUrl: "https://example.com", siteName: "ContentHub", defaultLocale: "vi" };
 
 describe("paths", () => {
-  it("builds story/chapter/author/category/tag paths", () => {
-    expect(paths.story("tu-tien-1000-nam")).toBe("/truyen/tu-tien-1000-nam");
-    expect(paths.chapter("tu-tien-1000-nam", "chuong-25")).toBe("/truyen/tu-tien-1000-nam/chuong-25");
+  it("builds item/part/author/category/tag paths generically by URL prefix", () => {
+    expect(paths.section("truyen")).toBe("/truyen");
+    expect(paths.item("truyen", "tu-tien-1000-nam")).toBe("/truyen/tu-tien-1000-nam");
+    expect(paths.part("truyen", "tu-tien-1000-nam", "chuong-25")).toBe("/truyen/tu-tien-1000-nam/chuong-25");
     expect(paths.author("nguyen-van-an")).toBe("/tac-gia/nguyen-van-an");
     expect(paths.category("tien-hiep")).toBe("/the-loai/tien-hiep");
     expect(paths.tag("tu-tien")).toBe("/tag/tu-tien");
-    expect(paths.article("tin-cong-nghe-hom-nay")).toBe("/tin-tuc/tin-cong-nghe-hom-nay");
+    expect(paths.item("tin-tuc", "tin-cong-nghe-hom-nay")).toBe("/tin-tuc/tin-cong-nghe-hom-nay");
   });
 });
 

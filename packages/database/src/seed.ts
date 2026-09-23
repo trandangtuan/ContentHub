@@ -81,7 +81,7 @@ async function main() {
       visibility: ContentVisibility.PUBLIC,
       language: "vi",
       publishedAt: new Date(),
-      story: { create: { subtitle: "Thiên đạo vô tình", ageRating: "13+" } },
+      attributes: { subtitle: "Thiên đạo vô tình", ageRating: "13+" },
       categories: { create: [{ categoryId: category.id }] },
       tags: { create: [{ tagId: tag.id }] },
       seoMetadata: {

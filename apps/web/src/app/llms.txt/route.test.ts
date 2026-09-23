@@ -7,6 +7,6 @@ describe("GET /llms.txt", () => {
     expect(response.headers.get("Content-Type")).toContain("text/plain");
     const text = await response.text();
     expect(text).toContain("ContentHub");
-    expect(text).toContain("/truyen/{story-slug}");
+    expect(text).toContain("/truyen/{slug}");
   });
 });

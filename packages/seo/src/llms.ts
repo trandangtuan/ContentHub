@@ -1,4 +1,5 @@
 import type { SeoConfig } from "./config";
+import { CONTENT_TYPES } from "./content-types";
 
 /**
  * /llms.txt (docs/SEO.md #22, #67): a short, human-and-AI-readable description
@@ -6,27 +7,30 @@ import type { SeoConfig } from "./config";
  * no database schema, no sensitive data — ever.
  */
 export function buildLlmsTxt(config: SeoConfig): string {
+  const contentList = CONTENT_TYPES.map((c) => `- ${c.label}${c.partsMode === "multi" ? " (and their chapters)" : ""}`).join("\n");
+  const urlList = CONTENT_TYPES.flatMap((c) => [
+    `${config.siteUrl}/${c.urlPrefix}/`,
+    `${config.siteUrl}/${c.urlPrefix}/{slug}`,
+    ...(c.partsMode === "multi" ? [`${config.siteUrl}/${c.urlPrefix}/{slug}/{part-slug}`] : []),
+  ])
+    .map((u) => `- ${u}`)
+    .join("\n");
+
   return `# ${config.siteName}
 
 ${config.siteName} is a user-generated content platform. Readers browse and read
-stories published by independent creators.
+content published by independent creators.
 
 ## Content
 
-- Stories
-- Chapters
-- News articles ("tin tức" — daily posts from creators)
+${contentList}
 - Authors
 - Categories
 - Tags
 
 ## Public URLs
 
-- ${config.siteUrl}/truyen/
-- ${config.siteUrl}/truyen/{story-slug}
-- ${config.siteUrl}/truyen/{story-slug}/{chapter-slug}
-- ${config.siteUrl}/tin-tuc/
-- ${config.siteUrl}/tin-tuc/{article-slug}
+${urlList}
 - ${config.siteUrl}/tac-gia/{creator-slug}
 - ${config.siteUrl}/the-loai/{category-slug}
 - ${config.siteUrl}/tag/{tag-slug}
@@ -85,9 +89,10 @@ ${categoryList || "  (none yet)"}
 
 ## URL structure
 
-- Story: ${config.siteUrl}/truyen/{story-slug}
-- Chapter: ${config.siteUrl}/truyen/{story-slug}/{chapter-slug}
-- News article: ${config.siteUrl}/tin-tuc/{article-slug}
+${CONTENT_TYPES.flatMap((c) => [
+    `- ${c.label}: ${config.siteUrl}/${c.urlPrefix}/{slug}`,
+    ...(c.partsMode === "multi" ? [`- ${c.label} chapter: ${config.siteUrl}/${c.urlPrefix}/{slug}/{part-slug}`] : []),
+  ]).join("\n")}
 - Author: ${config.siteUrl}/tac-gia/{creator-slug}
 - Category: ${config.siteUrl}/the-loai/{category-slug}
 - Tag: ${config.siteUrl}/tag/{tag-slug}

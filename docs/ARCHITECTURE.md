@@ -54,10 +54,14 @@ start.
 User
  └── CreatorProfile (1:1, created when a user "becomes a Creator")
       ├── Content (n)              -- polymorphic: type = STORY | ARTICLE | COMIC | VIDEO | AUDIO | PODCAST
-      │    ├── Story (1:1)         -- type-specific extension for type=STORY (subtitle, ageRating)
-      │    ├── Article (1:1)       -- type-specific extension for type=ARTICLE ("tin tức" daily news: bodyHtml/bodyJson/wordCount live here directly, no ContentPart — one post, not chapters)
-      │    ├── ContentPart (n)     -- a chapter (STORY today; a section/episode for other types later)
-      │    │    └── ContentVersion (n)   -- revision history, one row per save
+      │    │                          .attributes (Json?) holds type-specific scalar metadata
+      │    │                          (e.g. STORY's {subtitle, ageRating}) — no per-type table for this
+      │    ├── ContentPart (n)     -- every type's body, distinguished only by how many parts it
+      │    │    │                     has (packages/seo's content-types registry's `partsMode`):
+      │    │    │                     STORY is "multi" (one part per chapter, ordered,
+      │    │    │                     independently publishable); ARTICLE is "single" (exactly
+      │    │    │                     one part, created with its Content, holding the whole post)
+      │    │    └── ContentVersion (n)   -- revision history, one row per save (every type gets this for free)
       │    ├── ContentCategory / ContentTag (n:n)
       │    ├── SeoMetadata (1:1)
       │    └── Redirect (n)        -- 301s created when a slug changes
@@ -78,16 +82,38 @@ RevenueConfig (versioned) → RevenuePool (one per YYYY-MM) → RevenueTransacti
 the spec is explicit that the system must not be designed "around stories."
 `Content` carries everything every content type needs (title, slug,
 status, visibility, language, publishedAt, creator, categories, tags,
-views, revenue, SEO metadata). `Story` and `Article` are narrow 1:1
-extension tables holding only what's type-specific: `Story` has
-`subtitle`/`ageRating`; `Article` has the daily-news post's own
-`bodyHtml`/`bodyJson`/`wordCount`/`readingTimeMinutes` (no `ContentPart` —
-a news post is one unit, not a serialized set of chapters). `ContentView`,
+views, revenue, SEO metadata, `attributes`). `ContentView`,
 `RevenueTransaction`, `SeoMetadata`, `Comment`, `Like`, `Follow` — none of
-that changes per type, because they're keyed on `Content`, not on `Story`
-or `Article`. Adding `COMIC`/`VIDEO`/`AUDIO`/`PODCAST` later follows the
-same recipe: a new `ContentType` enum value, a new 1:1 extension table, a
-new `apps/web` route, and API endpoints under `/creator/<type>`.
+that changes per type, because they're keyed on `Content`, not on a
+per-type table.
+
+**Adding a new `ContentType`** (`packages/seo/src/content-types.ts`'s
+registry is the single source of truth) needs, at minimum, one new entry
+there — `{ type, urlPrefix, apiResource, label, itemLabel, partsMode,
+jsonLd }` — and nothing else, *if* it fits one of the two existing shapes:
+
+- `partsMode: "multi"` (like STORY): an ordered, independently-published
+  set of `ContentPart`s (chapters). The item itself is metadata + a
+  separately-managed parts list.
+- `partsMode: "single"` (like ARTICLE): exactly one `ContentPart`, created
+  together with its `Content` and never separately listed — the item *is*
+  its one part.
+
+Because every route family is generated generically from this registry —
+`apps/api/src/routes/content.ts`'s `registerContentTypeRoutes`,
+`apps/api/src/routes/public.ts`'s `registerPublicContentTypeRoutes`,
+`apps/web`'s `app/(public)/[section]/**` and `app/dashboard/[section]/**`
+route trees, `apps/web/src/lib/sitemap-providers.ts`'s
+`ContentSitemapProvider`/`PartSitemapProvider`, and the nav/robots/llms.txt
+generators that loop the registry — a type with only scalar metadata
+beyond title/description/cover (stored in `Content.attributes: Json?`,
+validated at the API boundary rather than by the DB, the same tradeoff
+already made for `ContentPart.bodyJson`) needs **no new migration, no new
+route file, and no new React component**: just the registry entry. A type
+that needs a genuinely new *rendering shape* (e.g. a VIDEO player) still
+needs its own detail-page branch and dashboard editor, but reuses
+everything else — ownership checks, publish/unpublish/delete, slugging +
+redirects, categories/tags, view tracking, sitemap, JSON-LD dispatch.
 
 ## Folder structure
 

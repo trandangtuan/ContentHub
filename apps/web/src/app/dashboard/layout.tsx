@@ -1,13 +1,14 @@
 "use client";
 
 import Link from "next/link";
+import { CONTENT_TYPES } from "@contenthub/seo";
 import { useSession } from "@/lib/use-session";
 import { AppSidebarNav } from "@/components/AppSidebarNav";
 
+// A new ContentType (packages/seo's registry) shows up in the sidebar automatically.
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Tổng quan", exact: true },
-  { href: "/dashboard/stories", label: "Truyện" },
-  { href: "/dashboard/articles", label: "Tin tức" },
+  ...CONTENT_TYPES.map((c) => ({ href: `/dashboard/${c.urlPrefix}`, label: c.label })),
   { href: "/dashboard/analytics", label: "Analytics" },
   { href: "/dashboard/revenue", label: "Doanh thu" },
   { href: "/dashboard/wallet", label: "Ví" },

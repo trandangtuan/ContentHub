@@ -1,64 +1,53 @@
-import type { Content, ContentPart, CreatorProfile, Category, Tag, Story, Article } from "@contenthub/database";
+import type { Content, ContentPart, CreatorProfile, Category, Tag } from "@contenthub/database";
+import { paths, type ContentTypeConfig } from "@contenthub/seo";
 
 /**
  * Public API responses (spec #25): only what a reader/crawler may see.
  * Never include email, wallet, revenue, or internal moderation fields —
  * this is the one place that boundary is enforced for the JSON API.
+ *
+ * Generic across every ContentType (packages/seo's registry): `attributes`
+ * carries type-specific scalar metadata (e.g. STORY's subtitle/ageRating);
+ * `parts` (only passed for a "multi" type) becomes `chapters`; a "single"
+ * type's sole part is flattened into `bodyHtml`/`wordCount`/`readingTimeMinutes`.
  */
-export function serializePublicStory(
-  content: Content & { story: Story | null; creator: CreatorProfile; categories: { category: Category }[]; tags: { tag: Tag }[] },
-  chapters: ContentPart[],
+export function serializePublicContent(
+  content: Content & { creator: CreatorProfile; categories: { category: Category }[]; tags: { tag: Tag }[] },
+  config: ContentTypeConfig,
   siteUrl: string,
+  parts: ContentPart[] = [],
 ) {
-  return {
+  const base = {
     id: content.id,
     type: content.type,
     title: content.title,
-    subtitle: content.story?.subtitle ?? null,
     slug: content.slug,
     description: content.description,
     shortDescription: content.shortDescription,
     coverImage: content.coverImage,
     language: content.language,
-    ageRating: content.story?.ageRating ?? null,
+    attributes: (content.attributes as Record<string, unknown> | null) ?? {},
     author: {
       slug: content.creator.slug,
       name: content.creator.displayName,
-      url: `${siteUrl}/tac-gia/${content.creator.slug}`,
+      url: `${siteUrl}${paths.author(content.creator.slug)}`,
     },
-    chapters: chapters.map((c) => ({ slug: c.slug, title: c.title, position: c.position, publishedAt: c.publishedAt })),
     genres: content.categories.map((c) => ({ slug: c.category.slug, name: c.category.name })),
     tags: content.tags.map((t) => ({ slug: t.tag.slug, name: t.tag.name })),
-    url: `${siteUrl}/truyen/${content.slug}`,
+    url: `${siteUrl}${paths.item(config.urlPrefix, content.slug)}`,
     publishedAt: content.publishedAt,
     updatedAt: content.updatedAt,
   };
-}
 
-/** Public API response for Content.type = ARTICLE ("tin tức" — daily news posts). */
-export function serializePublicArticle(
-  content: Content & { article: Article | null; creator: CreatorProfile },
-  siteUrl: string,
-) {
+  if (config.partsMode === "multi") {
+    return { ...base, chapters: parts.map((p) => ({ slug: p.slug, title: p.title, position: p.position, publishedAt: p.publishedAt })) };
+  }
+
+  const singlePart = parts[0];
   return {
-    id: content.id,
-    type: content.type,
-    title: content.title,
-    slug: content.slug,
-    description: content.description,
-    shortDescription: content.shortDescription,
-    coverImage: content.coverImage,
-    language: content.language,
-    bodyHtml: content.article?.bodyHtml ?? null,
-    wordCount: content.article?.wordCount ?? 0,
-    readingTimeMinutes: content.article?.readingTimeMinutes ?? 0,
-    author: {
-      slug: content.creator.slug,
-      name: content.creator.displayName,
-      url: `${siteUrl}/tac-gia/${content.creator.slug}`,
-    },
-    url: `${siteUrl}/tin-tuc/${content.slug}`,
-    publishedAt: content.publishedAt,
-    updatedAt: content.updatedAt,
+    ...base,
+    bodyHtml: singlePart?.bodyHtml ?? null,
+    wordCount: singlePart?.wordCount ?? 0,
+    readingTimeMinutes: singlePart?.readingTimeMinutes ?? 0,
   };
 }

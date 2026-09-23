@@ -3,12 +3,12 @@ export const dynamic = "force-dynamic";
 
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { buildPageMetadata, buildBreadcrumbJsonLd, breadcrumbs, getRobotsMetadata, titleTemplates, paths } from "@contenthub/seo";
+import { buildPageMetadata, buildBreadcrumbJsonLd, breadcrumbs, getRobotsMetadata, titleTemplates, paths, contentTypeByKey } from "@contenthub/seo";
 import { getSeoConfig } from "@/lib/seo-config";
-import { getTagBySlug, getTagStories } from "@/lib/public-data";
+import { getTagBySlug, getTagItems } from "@/lib/public-data";
 import { Breadcrumbs } from "@/components/Breadcrumbs";
 import { JsonLd } from "@/components/JsonLd";
-import { StoryCard } from "@/components/StoryCard";
+import { ContentCard } from "@/components/ContentCard";
 
 interface Params {
   tagSlug: string;
@@ -42,7 +42,7 @@ export default async function TagPage({ params }: { params: Promise<Params> }) {
   const tag = await getTagBySlug(tagSlug);
   if (!tag) notFound();
 
-  const stories = await getTagStories(tag.id);
+  const items = await getTagItems(tag.id);
   const trail = breadcrumbs.tag(tag.name, tag.slug);
 
   return (
@@ -52,13 +52,15 @@ export default async function TagPage({ params }: { params: Promise<Params> }) {
 
       <h1>Tag: {tag.name}</h1>
 
-      {stories.length === 0 ? (
-        <p className="empty-state">Chưa có truyện nào gắn tag này.</p>
+      {items.length === 0 ? (
+        <p className="empty-state">Chưa có nội dung nào gắn tag này.</p>
       ) : (
         <div className="card-grid">
-          {stories.map((story) => (
-            <StoryCard key={story.id} story={{ slug: story.slug, title: story.title, coverImage: story.coverImage, shortDescription: story.shortDescription }} />
-          ))}
+          {items.map((item) => {
+            const typeConfig = contentTypeByKey(item.type);
+            if (!typeConfig) return null;
+            return <ContentCard key={item.id} config={typeConfig} item={{ slug: item.slug, title: item.title, coverImage: item.coverImage, shortDescription: item.shortDescription }} />;
+          })}
         </div>
       )}
     </main>
